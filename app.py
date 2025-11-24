@@ -7,12 +7,11 @@ from datetime import datetime
 from collections import defaultdict
 
 # --- UYGULAMA YAPILANDIRMASI ---
-# Render portunu al, yoksa yerel test için 5000 kullan
 PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__)
 DATABASE = 'envanter_v5.db' 
 
-# --- 0. SABİT TANIMLAMALAR (Aynı Kaldı) ---
+# --- 0. SABİT TANIMLAMALAR ---
 KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
 CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
@@ -113,7 +112,7 @@ def get_next_siparis_kodu(conn):
 
     return f"{prefix}{next_num:04d}"
 
-# --- 5. HTML ŞABLONU (Aynı Kaldı) ---
+# --- 5. HTML ŞABLONU (Burada Sil butonu eklendi) ---
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -287,6 +286,11 @@ HTML_TEMPLATE = """
                                 <input type="hidden" name="siparis_id" value="{{ s['id'] }}">
                                 <button type="submit" style="background-color:#cc8400;">UV Baskı & Tamamla</button>
                             </form>
+                            <form action="/siparis" method="POST" style="display:inline; margin-left: 5px;">
+                                <input type="hidden" name="action" value="siparis_sil">
+                                <input type="hidden" name="siparis_id" value="{{ s['id'] }}">
+                                <button type="submit" onclick="return confirm('Siparişi silmek istediğinize emin misiniz?')" style="background-color:red;">SİL</button>
+                            </form>
                         {% endif %}
                     </td>
                 </tr>
@@ -414,6 +418,11 @@ def siparis_islem():
         elif action == 'siparis_karsila':
             siparis_id = int(request.form['siparis_id'])
             message = fulfill_siparis(conn, siparis_id)
+        
+        # YENİ SİPARİŞ SİLME İŞLEMİ
+        elif action == 'siparis_sil':
+            siparis_id = int(request.form['siparis_id'])
+            message = delete_siparis(conn, siparis_id)
             
         conn.commit()
         return redirect(url_for('index', message=message))
@@ -422,7 +431,7 @@ def siparis_islem():
         conn.close()
         return redirect(url_for('index', message=f"Hata: {e}"))
 
-# --- 3. İŞLEM MANTIKLARI (Aynı Kaldı) ---
+# --- 3. İŞLEM MANTIKLARI ---
 
 def calculate_deficit(conn):
     bekleyen_siparis = conn.execute("""
@@ -503,42 +512,55 @@ def fulfill_siparis(conn, siparis_id):
     conn.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0 WHERE id = ?", (siparis_id,))
     
     return f"🎉 Sipariş {siparis['siparis_kodu']} ({siparis['urun_kodu']}) başarıyla tamamlandı ve {m2} m² Sıvalı Stok düşüldü."
+
+def delete_siparis(conn, siparis_id):
+    """Veritabanından siparişi tamamen siler."""
+    conn.execute("DELETE FROM siparisler WHERE id = ?", (siparis_id,))
+    return f"❌ Sipariş ID: {siparis_id} başarıyla SİLİNDİ."
     
-# --- 4. MOBİL İÇİN API UÇ NOKTASI (Veritabanı Try/Finally ile güvenli hale getirildi) ---
+# --- 4. MOBİL İÇİN API UÇ NOKTASI (Sipariş verisi eklendi) ---
 
 @app.route('/api/stok')
 def api_stok():
     conn = get_db_connection()
     try:
-        # Mobil görünüm için gerekli verileri çekiyoruz
+        # Stok verisi çekimi
         stok = conn.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok").fetchall()
         
-        # Sizin HTML'inizin beklediği basit {Aşama: Adet} formatına çeviriyoruz (Tüm aşamaları birleştirip listeliyoruz)
-        # Basit stok toplamını döndürme:
+        # Bekleyen Sipariş verisi çekimi
+        siparisler = conn.execute("SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 FROM siparisler WHERE durum='Bekliyor' ORDER BY termin_tarihi ASC").fetchall()
+        
+        # Stokları basit {Anahtar: Adet} formatına çevirme
         stok_data = {}
         for row in stok:
             key = f"{row['cinsi']} {row['kalinlik']} ({row['asama']})"
             stok_data[key] = row['m2']
+
+        # Sipariş listesini JSON'a uygun listeye çevirme
+        siparis_list = [dict(row) for row in siparisler]
             
-        return json.dumps(stok_data)
+        # Hem stok hem siparişi içeren nihai JSON
+        response_data = {
+            "stok": stok_data,
+            "siparisler": siparis_list
+        }
+        
+        return json.dumps(response_data)
 
     except Exception as e:
         print(f"API Hata Detayı: {e}")
-        # Hata durumunda 500 kodu ile JSON hata mesajı döndürüyoruz.
         return json.dumps({"error": "Veritabanı erişim hatası"}), 500
     finally:
         conn.close()
 
 
-# --- 5. MOBİL GÖRÜNTÜLEME HTML DOSYASINI SUNMA (Render Sorununu Çözen Yol) ---
+# --- 5. MOBİL GÖRÜNTÜLEME HTML DOSYASINI SUNMA ---
 
 @app.route('/stok_goruntule.html')
 def mobil_goruntuleme():
     """stok_goruntule.html dosyasını tarayıcıya sunar."""
-    # Dosyanın aynı dizinde olduğunu varsayarak gönderiyoruz
     return send_file('stok_goruntule.html')
 
-# Yerel çalıştırma kısmı (Render'da Gunicorn kullanıldığı için bu satırlar kullanılmaz)
+# Yerel çalıştırma kısmı
 if __name__ == '__main__':
-    # Flask sunucusunu yerel ağda başlat (Test için)
     app.run(host='0.0.0.0', port=PORT, debug=True)

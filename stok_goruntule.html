@@ -14,9 +14,8 @@
         th { background-color: #007bff; color: white; }
         .loading, .error { text-align: center; padding: 20px; color: red; }
         .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .deficit { color: red; font-weight: bold; }
-        .production { color: blue; font-weight: bold; }
         .count-cell { font-weight: bold; font-size: 1.1em; }
+        .siparis-kodu { color: #cc8400; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -38,15 +37,14 @@
     </div>
 
     <script>
-        // API ADRESİ: Render'da çalışmak için tek yapılması gereken düzeltme budur.
         const API_URL = "/api/stok";
 
         document.addEventListener('DOMContentLoaded', fetchData);
 
         async function fetchData() {
             document.getElementById('stok-tablosu').innerHTML = '<div class="loading">Veriler çekiliyor...</div>';
-            document.getElementById('siparis-listesi').innerHTML = 'Güncel sipariş verisi API\'ye eklendiğinde burada görünecektir.'; // Sipariş kısmını basitleştiriyoruz
-
+            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">Siparişler çekiliyor...</div>';
+            
             try {
                 const response = await fetch(API_URL);
                 
@@ -55,24 +53,24 @@
                 }
                 const data = await response.json();
                 
-                // API sadece basit bir {'Aşama': Adet} döndürdüğü için renderStok fonksiyonunu basitleştiriyoruz
-                renderStok(data);
+                // API'den gelen iki anahtar: "stok" ve "siparisler"
+                renderStok(data.stok);
+                renderSiparisler(data.siparisler);
 
             } catch (error) {
                 console.error("Fetch Error:", error);
-                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası. Uygulama API'sine ulaşılamıyor.</div>`;
+                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor.</div>`;
                 document.getElementById('siparis-listesi').innerHTML = '';
             }
         }
 
         function renderStok(stokData) {
-            let html = '<table><tr><th>Aşama</th><th>Adet</th></tr>';
+            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th></tr>';
             
-            // Sadece key/value döngüsü kullanarak API'den gelen basit veriyi işleme
             for (const [key, value] of Object.entries(stokData)) {
                 html += `<tr>
                     <td>${key}</td>
-                    <td class="count-cell">${value}</td>
+                    <td class="count-cell">${value} m²</td>
                 </tr>`;
             }
 
@@ -80,9 +78,24 @@
             document.getElementById('stok-tablosu').innerHTML = html;
         }
 
-        // Eski sipariş ve detaylı analiz fonksiyonlarını siliyoruz, çünkü API şu an bu verileri sağlamıyor.
-        // function renderSiparisler(siparisler) { ... }
-        // function renderStok(stokData, eksikAnalizi) { ... } // Eski versiyonun yerine yeni renderStok kullanılıyor
+        function renderSiparisler(siparisler) {
+            let html = '<table><tr><th>Sipariş Kod</th><th>Müşteri</th><th>Ürün Kod</th><th>M²</th></tr>';
+
+            if (siparisler.length === 0) {
+                html += '<tr><td colspan="4">Bekleyen aktif sipariş bulunmamaktadır.</td></tr>';
+            } else {
+                siparisler.forEach(s => {
+                    html += `<tr>
+                        <td><span class="siparis-kodu">${s.siparis_kodu}</span></td>
+                        <td>${s.musteri}</td>
+                        <td>${s.urun_kodu}</td>
+                        <td class="count-cell">${s.bekleyen_m2} m²</td>
+                    </tr>`;
+                });
+            }
+            html += '</table>';
+            document.getElementById('siparis-listesi').innerHTML = html;
+        }
     </script>
 </body>
 </html>
