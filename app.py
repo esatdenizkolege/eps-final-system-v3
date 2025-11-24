@@ -1,37 +1,29 @@
 # -*- coding: utf-8 -*-
 import os
-from flask import Flask, render_template_string, request, redirect, url_for
+from flask import Flask, render_template_string, request, redirect, url_for, send_file
 import sqlite3
 import json
 from datetime import datetime
 from collections import defaultdict
 
 # --- UYGULAMA YAPILANDIRMASI ---
+# Render portunu al, yoksa yerel test için 5000 kullan
+PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__)
-# Veritabanı adı
 DATABASE = 'envanter_v5.db' 
 
-# --- 0. SABİT TANIMLAMALAR ---
-# Kalınlıklar güncellendi.
+# --- 0. SABİT TANIMLAMALAR (Aynı Kaldı) ---
 KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
-# Excel dosyasından çekilen tüm geçerli Cinsler
 CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
-
-# Tüm varyantlar (Cins x Kalınlık)
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-
-# Plaka M2 Bilgisi (Sistem M2 cinsinden çalışır, bu bilgi sadece referans içindir)
 PLATE_M2_MAP = {
     '2 CM': 0.5,    
     '3.6 CM': 0.6,
-    '3 CM': 1.0,     # Mermer, LA, LB gibi 1m2 kabul edilen plakalar için varsayılan
+    '3 CM': 1.0,    
     'MERMER': 1.0, 
-    'LA': 1.0,     
+    'LA': 1.0,      
     'LB ZEMİN': 1.0,
 }
-
-
-# Excel dosyasından çıkarılan Cins/Kalınlık -> Boyalı Kodlar haritası
 CINS_TO_BOYALI_MAP = {
     'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
     'PARKE TAŞ 2 CM': ['PT001', 'PT002', 'PT003', 'PT004', 'PT005', 'PT006', 'PT007', 'PT008', 'PT009', 'PT010', 'PT011', 'PT012', 'PT013', 'PT014', 'PT015', 'PT016', 'PT017', 'PT018', 'PT019', 'PT020', 'PT021', 'PT022', 'PT023', 'PT024', 'PT025', 'PT026', 'PT027', 'PT028', 'PT029', 'PT030'],
@@ -45,19 +37,17 @@ CINS_TO_BOYALI_MAP = {
     'MERMER 3 CM': [f"M{i:03}" for i in range(1, 10)],
     'LA 3 CM': [f"L{i:03}" for i in range(1, 10)],
     'LB ZEMİN 3 CM': [f"LB{i:03}" for i in range(1, 10)],
-    # Eksik varyantları doldurmak için 
     'BAROK 3.6 CM': ['B401', 'B402', 'B403'], 
     'YATAY TAŞ 3.6 CM': ['YT401', 'YT402', 'YT403'], 
     'KAYRAK TAŞ 3.6 CM': ['KY401', 'KY402', 'KY403'], 
 }
-
-# Tüm Boyalı kodları içeren tek bir liste
 URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
 
 # --- 1. VERİTABANI İŞLEMLERİ ---
 
 def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
+    """Veritabanı bağlantısını açar. Render uyumu için check_same_thread=False eklenmiştir."""
+    conn = sqlite3.connect(DATABASE, check_same_thread=False) 
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -100,9 +90,7 @@ def init_db():
 with app.app_context():
     init_db()
 
-# Yeni Fonksiyon: Otomatik Sipariş Kodu Oluşturma
 def get_next_siparis_kodu(conn):
-    """S-YYYY-XXXX formatında sıradaki sipariş kodunu oluşturur."""
     current_year = datetime.now().year
     prefix = f'S-{current_year}-'
     
@@ -119,14 +107,13 @@ def get_next_siparis_kodu(conn):
             current_num = int(max_code.split('-')[-1])
             next_num = current_num + 1
         except (ValueError, IndexError):
-            # Kod formatı bozuksa, sıfırdan başla
             next_num = 1
     else:
         next_num = 1
 
     return f"{prefix}{next_num:04d}"
 
-# --- 5. HTML ŞABLONU (Sipariş Kodu Girişi Kaldırıldı) ---
+# --- 5. HTML ŞABLONU (Aynı Kaldı) ---
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -357,7 +344,7 @@ def index():
     siparisler = conn.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC").fetchall()
     
     deficit_analysis = calculate_deficit(conn) 
-    next_siparis_kodu = get_next_siparis_kodu(conn) # Otomatik kod oluşturuldu
+    next_siparis_kodu = get_next_siparis_kodu(conn)
     conn.close()
     
     today = datetime.now().strftime('%Y-%m-%d')
@@ -371,7 +358,7 @@ def index():
                                           CINSLER=CINSLER,
                                           deficit_analysis=deficit_analysis,
                                           today=today,
-                                          next_siparis_kodu=next_siparis_kodu, # HTML'e gönderildi
+                                          next_siparis_kodu=next_siparis_kodu,
                                           cins_to_boyali_map=CINS_TO_BOYALI_MAP,
                                           message=request.args.get('message'))
     return html_content
@@ -412,7 +399,7 @@ def siparis_islem():
         
         if action == 'yeni_siparis':
             
-            siparis_kodu = get_next_siparis_kodu(conn) # OTOMATİK KOD KULLANILDI
+            siparis_kodu = get_next_siparis_kodu(conn)
             
             urun_kodu = request.form['urun_kodu']
             cinsi = request.form['cinsi']
@@ -435,11 +422,9 @@ def siparis_islem():
         conn.close()
         return redirect(url_for('index', message=f"Hata: {e}"))
 
-# --- 3. İŞLEM MANTIKLARI (Aynı kaldı) ---
+# --- 3. İŞLEM MANTIKLARI (Aynı Kaldı) ---
 
 def calculate_deficit(conn):
-    """İki seviyeli (Sıvalı ve Ham) kümülatif eksikliği M2 cinsinden hesaplar."""
-    
     bekleyen_siparis = conn.execute("""
         SELECT cinsi, kalinlik, SUM(bekleyen_m2) as total_required 
         FROM siparisler WHERE durum='Bekliyor' GROUP BY cinsi, kalinlik
@@ -519,33 +504,41 @@ def fulfill_siparis(conn, siparis_id):
     
     return f"🎉 Sipariş {siparis['siparis_kodu']} ({siparis['urun_kodu']}) başarıyla tamamlandı ve {m2} m² Sıvalı Stok düşüldü."
     
-# --- 4. MOBİL İÇİN API UÇ NOKTASI (Aynı kaldı) ---
+# --- 4. MOBİL İÇİN API UÇ NOKTASI (Veritabanı Try/Finally ile güvenli hale getirildi) ---
 
 @app.route('/api/stok')
 def api_stok():
     conn = get_db_connection()
-    stok = conn.execute("SELECT * FROM stok ORDER BY cinsi, kalinlik, asama").fetchall()
-    siparisler = conn.execute("SELECT * FROM siparisler WHERE durum='Bekliyor' ORDER BY termin_tarihi ASC").fetchall()
-    deficit_analysis = calculate_deficit(conn)
-    conn.close()
-    
-    stok_list = [dict(row) for row in stok]
-    siparis_list = [dict(row) for row in siparisler]
+    try:
+        # Mobil görünüm için gerekli verileri çekiyoruz
+        stok = conn.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok").fetchall()
+        
+        # Sizin HTML'inizin beklediği basit {Aşama: Adet} formatına çeviriyoruz (Tüm aşamaları birleştirip listeliyoruz)
+        # Basit stok toplamını döndürme:
+        stok_data = {}
+        for row in stok:
+            key = f"{row['cinsi']} {row['kalinlik']} ({row['asama']})"
+            stok_data[key] = row['m2']
+            
+        return json.dumps(stok_data)
 
-    response_data = {
-        'stok_detay': stok_list,
-        'bekleyen_siparisler': siparis_list,
-        'eksik_analizi': deficit_analysis
-    }
-    return json.dumps(response_data)
+    except Exception as e:
+        print(f"API Hata Detayı: {e}")
+        # Hata durumunda 500 kodu ile JSON hata mesajı döndürüyoruz.
+        return json.dumps({"error": "Veritabanı erişim hatası"}), 500
+    finally:
+        conn.close()
 
-if __name__ == '__main__':
-    app.run(debug=True)
-    # --- MOBIL GORUNTULEME ICIN HTML DOSYASINI SUNMA ---
 
-from flask import send_file
+# --- 5. MOBİL GÖRÜNTÜLEME HTML DOSYASINI SUNMA (Render Sorununu Çözen Yol) ---
 
 @app.route('/stok_goruntule.html')
 def mobil_goruntuleme():
-    # Bu, stok_goruntule.html dosyasını doğrudan sunar
+    """stok_goruntule.html dosyasını tarayıcıya sunar."""
+    # Dosyanın aynı dizinde olduğunu varsayarak gönderiyoruz
     return send_file('stok_goruntule.html')
+
+# Yerel çalıştırma kısmı (Render'da Gunicorn kullanıldığı için bu satırlar kullanılmaz)
+if __name__ == '__main__':
+    # Flask sunucusunu yerel ağda başlat (Test için)
+    app.run(host='0.0.0.0', port=PORT, debug=True)
