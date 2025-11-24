@@ -1,43 +1,7 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPS Mobil Stok Durumu (Salt Okunur)</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f4f4f9; }
-        .container { max-width: 800px; margin: auto; }
-        h1 { color: #0056b3; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; font-size: 0.9em; }
-        th { background-color: #007bff; color: white; }
-        .loading, .error { text-align: center; padding: 20px; color: red; }
-        .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .count-cell { font-weight: bold; font-size: 1.1em; }
-        .siparis-kodu { color: #cc8400; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="status-header">
-            <h1>Mobil Stok Takip (Adet)</h1>
-            <button onclick="fetchData()" style="background-color: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">Yenile</button>
-        </div>
-        
-        <div id="stok-bilgisi" class="card">
-            <h2>Mevcut Stok Durumu</h2>
-            <div id="stok-tablosu">Yükleniyor...</div>
-        </div>
-
-        <div id="siparis-bilgisi" class="card">
-            <h2>Bekleyen Siparişler</h2>
-            <div id="siparis-listesi">Yükleniyor...</div>
-        </div>
-    </div>
-
-    <script>
-        const API_URL = "/api/stok";
+<script>
+        // CRITICAL FIX: URL ayrıştırma hatasını gidermek için göreceli yol yerine 
+        // tarayıcının ana adresini (window.location.origin) kullanıyoruz. Bu, hata veren kodu düzeltir.
+        const API_URL = window.location.origin + "/api/stok";
 
         document.addEventListener('DOMContentLoaded', fetchData);
 
@@ -53,24 +17,51 @@
                 }
                 const data = await response.json();
                 
-                // API'den gelen iki anahtar: "stok" ve "siparisler"
-                renderStok(data.stok);
+                // API'den gelen veriler: "stok", "siparisler" (tüm siparişler) ve "deficit_analysis"
+                renderStok(data.stok, data.deficit_analysis); 
                 renderSiparisler(data.siparisler);
 
             } catch (error) {
-                console.error("Fetch Error:", error);
+                // Hata detayını konsola yazdır, kullanıcıya genel bir bağlantı hatası göster.
+                console.error("Fetch Error:", error); 
                 document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor.</div>`;
                 document.getElementById('siparis-listesi').innerHTML = '';
             }
         }
 
-        function renderStok(stokData) {
-            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th></tr>';
+        function renderStok(stokData, deficitAnalysis) {
+            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sipariş</th><th>Eksik Ham</th></tr>';
             
             for (const [key, value] of Object.entries(stokData)) {
+                
+                // key: "BAROK 2 CM (Ham)", "BAROK 2 CM (Sivali)"
+                const itemKey = key.substring(0, key.lastIndexOf(' (')); 
+                const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
+                const deficitInfo = deficitAnalysis[itemKey]; 
+                
+                let sivaliDeficitText = '-';
+                let hamDeficitText = '-';
+
+                if (asama === 'Sivali' && deficitInfo) {
+                    if (deficitInfo.sivali_deficit > 0) {
+                        sivaliDeficitText = `<span class="deficit-red">${deficitInfo.sivali_deficit} m² EKSİK</span>`;
+                    }
+                } 
+                
+                if (asama === 'Ham' && deficitInfo) {
+                    if (deficitInfo.ham_deficit > 0) {
+                         hamDeficitText = `<span class="deficit-red">${deficitInfo.ham_deficit} m² EKSİK</span>`;
+                    } else if (deficitInfo.ham_coverage > 0) {
+                         hamDeficitText = `<span class="production-blue">(Üretim Planı: ${deficitInfo.ham_coverage} m²)</span>`;
+                    }
+                }
+
+
                 html += `<tr>
                     <td>${key}</td>
                     <td class="count-cell">${value} m²</td>
+                    <td>${sivaliDeficitText}</td>
+                    <td>${hamDeficitText}</td>
                 </tr>`;
             }
 
@@ -79,17 +70,20 @@
         }
 
         function renderSiparisler(siparisler) {
-            let html = '<table><tr><th>Sipariş Kod</th><th>Müşteri</th><th>Ürün Kod</th><th>M²</th></tr>';
+            let html = '<table><tr><th>Sipariş Kod</th><th>Müşteri</th><th>Ürün Kod</th><th>M²</th><th>Durum</th></tr>';
 
             if (siparisler.length === 0) {
-                html += '<tr><td colspan="4">Bekleyen aktif sipariş bulunmamaktadır.</td></tr>';
+                html += '<tr><td colspan="5">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
             } else {
                 siparisler.forEach(s => {
+                    let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
+                    
                     html += `<tr>
                         <td><span class="siparis-kodu">${s.siparis_kodu}</span></td>
                         <td>${s.musteri}</td>
                         <td>${s.urun_kodu}</td>
                         <td class="count-cell">${s.bekleyen_m2} m²</td>
+                        <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
                     </tr>`;
                 });
             }
@@ -97,5 +91,3 @@
             document.getElementById('siparis-listesi').innerHTML = html;
         }
     </script>
-</body>
-</html>

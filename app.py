@@ -7,22 +7,18 @@ from datetime import datetime
 from collections import defaultdict
 
 # --- UYGULAMA YAPILANDIRMASI ---
+# Render portunu al, yoksa yerel test için 5000 kullan
 PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__)
 DATABASE = 'envanter_v5.db' 
 
 # --- 0. SABİT TANIMLAMALAR ---
+# Kalınlıklar ve Cinsler (Sizin Projenizden Alınmıştır)
 KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
 CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-PLATE_M2_MAP = {
-    '2 CM': 0.5,    
-    '3.6 CM': 0.6,
-    '3 CM': 1.0,    
-    'MERMER': 1.0, 
-    'LA': 1.0,      
-    'LB ZEMİN': 1.0,
-}
+
+# Cins ve Kalınlığa göre Boyalı Ürün Kodları Haritası
 CINS_TO_BOYALI_MAP = {
     'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
     'PARKE TAŞ 2 CM': ['PT001', 'PT002', 'PT003', 'PT004', 'PT005', 'PT006', 'PT007', 'PT008', 'PT009', 'PT010', 'PT011', 'PT012', 'PT013', 'PT014', 'PT015', 'PT016', 'PT017', 'PT018', 'PT019', 'PT020', 'PT021', 'PT022', 'PT023', 'PT024', 'PT025', 'PT026', 'PT027', 'PT028', 'PT029', 'PT030'],
@@ -46,11 +42,13 @@ URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for
 
 def get_db_connection():
     """Veritabanı bağlantısını açar. Render uyumu için check_same_thread=False eklenmiştir."""
+    # check_same_thread=False, Gunicorn gibi çoklu iş parçacığı kullanan sunucular için kritik bir düzeltmedir.
     conn = sqlite3.connect(DATABASE, check_same_thread=False) 
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
+    """Veritabanını ve gerekli tabloları oluşturur."""
     conn = get_db_connection()
     
     conn.execute("""
@@ -90,6 +88,7 @@ with app.app_context():
     init_db()
 
 def get_next_siparis_kodu(conn):
+    """Sıradaki sipariş kodunu oluşturur."""
     current_year = datetime.now().year
     prefix = f'S-{current_year}-'
     
@@ -112,7 +111,7 @@ def get_next_siparis_kodu(conn):
 
     return f"{prefix}{next_num:04d}"
 
-# --- 5. HTML ŞABLONU (Burada Sil butonu eklendi) ---
+# --- 5. HTML ŞABLONU (Sil Butonu Dahil) ---
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -286,6 +285,7 @@ HTML_TEMPLATE = """
                                 <input type="hidden" name="siparis_id" value="{{ s['id'] }}">
                                 <button type="submit" style="background-color:#cc8400;">UV Baskı & Tamamla</button>
                             </form>
+                            <!-- SİL BUTONU -->
                             <form action="/siparis" method="POST" style="display:inline; margin-left: 5px;">
                                 <input type="hidden" name="action" value="siparis_sil">
                                 <input type="hidden" name="siparis_id" value="{{ s['id'] }}">
@@ -419,7 +419,7 @@ def siparis_islem():
             siparis_id = int(request.form['siparis_id'])
             message = fulfill_siparis(conn, siparis_id)
         
-        # YENİ SİPARİŞ SİLME İŞLEMİ
+        # SİPARİŞ SİLME İŞLEMİ
         elif action == 'siparis_sil':
             siparis_id = int(request.form['siparis_id'])
             message = delete_siparis(conn, siparis_id)
@@ -434,6 +434,7 @@ def siparis_islem():
 # --- 3. İŞLEM MANTIKLARI ---
 
 def calculate_deficit(conn):
+    """İki seviyeli (Sıvalı ve Ham) kümülatif eksikliği M2 cinsinden hesaplar."""
     bekleyen_siparis = conn.execute("""
         SELECT cinsi, kalinlik, SUM(bekleyen_m2) as total_required 
         FROM siparisler WHERE durum='Bekliyor' GROUP BY cinsi, kalinlik
@@ -518,17 +519,20 @@ def delete_siparis(conn, siparis_id):
     conn.execute("DELETE FROM siparisler WHERE id = ?", (siparis_id,))
     return f"❌ Sipariş ID: {siparis_id} başarıyla SİLİNDİ."
     
-# --- 4. MOBİL İÇİN API UÇ NOKTASI (Sipariş verisi eklendi) ---
+# --- 4. MOBİL İÇİN API UÇ NOKTASI (Nihai Veri Çıktısı) ---
 
 @app.route('/api/stok')
 def api_stok():
     conn = get_db_connection()
     try:
-        # Stok verisi çekimi
+        # Stok verisi
         stok = conn.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok").fetchall()
         
-        # Bekleyen Sipariş verisi çekimi
-        siparisler = conn.execute("SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 FROM siparisler WHERE durum='Bekliyor' ORDER BY termin_tarihi ASC").fetchall()
+        # Eksik Analizi Verisini Çekme (Mobil görünüm için gerekli)
+        deficit_analysis = calculate_deficit(conn) 
+
+        # Tüm Sipariş verisi çekimi (Hem bekleyen hem tamamlanan)
+        siparisler = conn.execute("SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2, durum FROM siparisler ORDER BY termin_tarihi ASC").fetchall()
         
         # Stokları basit {Anahtar: Adet} formatına çevirme
         stok_data = {}
@@ -536,13 +540,19 @@ def api_stok():
             key = f"{row['cinsi']} {row['kalinlik']} ({row['asama']})"
             stok_data[key] = row['m2']
 
+        # Defisit analizini JSON'a uygun formata çevirme (tuple anahtarları string'e çevrilir)
+        deficit_json_ready = {}
+        for (c, k), value in deficit_analysis.items():
+            deficit_json_ready[f"{c} {k}"] = value
+
         # Sipariş listesini JSON'a uygun listeye çevirme
         siparis_list = [dict(row) for row in siparisler]
             
-        # Hem stok hem siparişi içeren nihai JSON
+        # Nihai JSON çıktısı
         response_data = {
             "stok": stok_data,
-            "siparisler": siparis_list
+            "siparisler": siparis_list,
+            "deficit_analysis": deficit_json_ready 
         }
         
         return json.dumps(response_data)
@@ -559,8 +569,9 @@ def api_stok():
 @app.route('/stok_goruntule.html')
 def mobil_goruntuleme():
     """stok_goruntule.html dosyasını tarayıcıya sunar."""
+    # Render'da HTML dosyasını doğru servis etme yolu
     return send_file('stok_goruntule.html')
 
-# Yerel çalıştırma kısmı
+# Yerel çalıştırma kısmı (Render'da Gunicorn kullanıldığı için bu satırlar kullanılmaz)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=True)
