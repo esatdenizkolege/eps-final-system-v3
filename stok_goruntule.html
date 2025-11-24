@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPS Mobil Stok Durumu (Salt Okunur)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; }
+        h1 { color: #0056b3; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px; border-bottom: 1px solid #ddd; text-align: left; font-size: 0.9em; }
+        th { background-color: #007bff; color: white; }
+        .loading, .error { text-align: center; padding: 20px; color: red; }
+        .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .deficit { color: red; font-weight: bold; }
+        .production { color: blue; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status-header">
+            <h1>Mobil Stok Takip (M²)</h1>
+            <button onclick="fetchData()" style="background-color: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">Yenile</button>
+        </div>
+        
+        <div id="stok-bilgisi" class="card">
+            <h2>3. Detaylı Stok Durumu</h2>
+            <div id="stok-tablosu">Yükleniyor...</div>
+        </div>
+
+        <div id="siparis-bilgisi" class="card">
+            <h2>4. Bekleyen Siparişler</h2>
+            <div id="siparis-listesi">Yükleniyor...</div>
+        </div>
+    </div>
+
+    <script>
+        // API ADRESİ: Bilgisayarınızın IP adresi olmalıdır.
+        // Düzeltilmiş: Uygulama aynı sunucudan veri çekeceği için sadece yolu belirtmek yeterlidir.
+const API_URL = "/api/stok";
+        document.addEventListener('DOMContentLoaded', fetchData);
+
+        async function fetchData() {
+            document.getElementById('stok-tablosu').innerHTML = '<div class="loading">Veriler çekiliyor...</div>';
+            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">Yükleniyor...</div>';
+
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error('API erişim hatası: Sunucu kapalı veya IP yanlış.');
+                }
+                const data = await response.json();
+                
+                renderStok(data.stok_detay, data.eksik_analizi);
+                renderSiparisler(data.bekleyen_siparisler);
+
+            } catch (error) {
+                console.error("Fetch Error:", error);
+                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası. Sunucu (${API_URL}) kapalı veya IP adresi hatalı.</div>`;
+                document.getElementById('siparis-listesi').innerHTML = '';
+            }
+        }
+
+        function renderStok(stokData, eksikAnalizi) {
+            let html = '<table><tr><th>Cins/Kalınlık</th><th>Aşama</th><th>M² Stok</th><th>Eksik Sipariş M²</th><th>Eksik Ham M²</th></tr>';
+            
+            stokData.forEach(item => {
+                const key = `${item.cinsi} ${item.kalinlik}`;
+                const deficitInfo = eksikAnalizi[key];
+
+                let sivaliDeficitText = '-';
+                let hamDeficitText = '-';
+                let stokValue = `${item.m2} m²`;
+                let rowClass = '';
+
+                if (item.asama === 'Sivali') {
+                    if (deficitInfo && deficitInfo.sivali_deficit > 0) {
+                        sivaliDeficitText = `<span class="deficit">${deficitInfo.sivali_deficit} m² EKSİK</span>`;
+                        rowClass = 'style="background-color: #ffdddd;"';
+                    }
+                } else if (item.asama === 'Ham') {
+                    if (deficitInfo) {
+                        if (deficitInfo.ham_deficit > 0) {
+                            hamDeficitText = `<span class="deficit">${deficitInfo.ham_deficit} m² EKSİK</span>`;
+                            rowClass = 'style="background-color: #ffdddd;"';
+                        } else if (deficitInfo.ham_coverage > 0) {
+                            hamDeficitText = `<span class="production">(Üretilecek: ${deficitInfo.ham_coverage} m²)</span>`;
+                        }
+                    }
+                }
+
+                html += `<tr ${rowClass}>
+                    <td>${item.cinsi} ${item.kalinlik}</td>
+                    <td>${item.asama}</td>
+                    <td>${stokValue}</td>
+                    <td>${sivaliDeficitText}</td>
+                    <td>${hamDeficitText}</td>
+                </tr>`;
+            });
+
+            html += '</table>';
+            document.getElementById('stok-tablosu').innerHTML = html;
+        }
+
+        function renderSiparisler(siparisler) {
+            let html = '<table><tr><th>Sipariş Kodu</th><th>Müşteri</th><th>Ürün Kodu</th><th>Termin</th><th>Bekleyen M²</th></tr>';
+            
+            if (siparisler.length === 0) {
+                html += '<tr><td colspan="5">Bekleyen aktif sipariş bulunmamaktadır.</td></tr>';
+            } else {
+                siparisler.forEach(s => {
+                    html += `<tr>
+                        <td>${s.siparis_kodu}</td>
+                        <td>${s.musteri}</td>
+                        <td>${s.urun_kodu} (${s.cinsi} ${s.kalinlik})</td>
+                        <td>${s.termin_tarihi}</td>
+                        <td>${s.bekleyen_m2} m²</td>
+                    </tr>`;
+                });
+            }
+
+            html += '</table>';
+            document.getElementById('siparis-listesi').innerHTML = html;
+        }
+    </script>
+</body>
+</html>
