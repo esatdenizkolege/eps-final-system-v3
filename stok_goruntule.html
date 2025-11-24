@@ -16,114 +16,73 @@
         .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .deficit { color: red; font-weight: bold; }
         .production { color: blue; font-weight: bold; }
+        .count-cell { font-weight: bold; font-size: 1.1em; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="status-header">
-            <h1>Mobil Stok Takip (M²)</h1>
+            <h1>Mobil Stok Takip (Adet)</h1>
             <button onclick="fetchData()" style="background-color: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">Yenile</button>
         </div>
         
         <div id="stok-bilgisi" class="card">
-            <h2>3. Detaylı Stok Durumu</h2>
+            <h2>Mevcut Stok Durumu</h2>
             <div id="stok-tablosu">Yükleniyor...</div>
         </div>
 
         <div id="siparis-bilgisi" class="card">
-            <h2>4. Bekleyen Siparişler</h2>
+            <h2>Bekleyen Siparişler</h2>
             <div id="siparis-listesi">Yükleniyor...</div>
         </div>
     </div>
 
     <script>
-        // API ADRESİ: Bilgisayarınızın IP adresi olmalıdır.
-        // Düzeltilmiş: Uygulama aynı sunucudan veri çekeceği için sadece yolu belirtmek yeterlidir.
-const API_URL = "/api/stok";
+        // API ADRESİ: Render'da çalışmak için tek yapılması gereken düzeltme budur.
+        const API_URL = "/api/stok";
+
         document.addEventListener('DOMContentLoaded', fetchData);
 
         async function fetchData() {
             document.getElementById('stok-tablosu').innerHTML = '<div class="loading">Veriler çekiliyor...</div>';
-            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">Yükleniyor...</div>';
+            document.getElementById('siparis-listesi').innerHTML = 'Güncel sipariş verisi API\'ye eklendiğinde burada görünecektir.'; // Sipariş kısmını basitleştiriyoruz
 
             try {
                 const response = await fetch(API_URL);
+                
                 if (!response.ok) {
-                    throw new Error('API erişim hatası: Sunucu kapalı veya IP yanlış.');
+                    throw new Error(`API erişim hatası: HTTP ${response.status}`);
                 }
                 const data = await response.json();
                 
-                renderStok(data.stok_detay, data.eksik_analizi);
-                renderSiparisler(data.bekleyen_siparisler);
+                // API sadece basit bir {'Aşama': Adet} döndürdüğü için renderStok fonksiyonunu basitleştiriyoruz
+                renderStok(data);
 
             } catch (error) {
                 console.error("Fetch Error:", error);
-                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası. Sunucu (${API_URL}) kapalı veya IP adresi hatalı.</div>`;
+                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası. Uygulama API'sine ulaşılamıyor.</div>`;
                 document.getElementById('siparis-listesi').innerHTML = '';
             }
         }
 
-        function renderStok(stokData, eksikAnalizi) {
-            let html = '<table><tr><th>Cins/Kalınlık</th><th>Aşama</th><th>M² Stok</th><th>Eksik Sipariş M²</th><th>Eksik Ham M²</th></tr>';
+        function renderStok(stokData) {
+            let html = '<table><tr><th>Aşama</th><th>Adet</th></tr>';
             
-            stokData.forEach(item => {
-                const key = `${item.cinsi} ${item.kalinlik}`;
-                const deficitInfo = eksikAnalizi[key];
-
-                let sivaliDeficitText = '-';
-                let hamDeficitText = '-';
-                let stokValue = `${item.m2} m²`;
-                let rowClass = '';
-
-                if (item.asama === 'Sivali') {
-                    if (deficitInfo && deficitInfo.sivali_deficit > 0) {
-                        sivaliDeficitText = `<span class="deficit">${deficitInfo.sivali_deficit} m² EKSİK</span>`;
-                        rowClass = 'style="background-color: #ffdddd;"';
-                    }
-                } else if (item.asama === 'Ham') {
-                    if (deficitInfo) {
-                        if (deficitInfo.ham_deficit > 0) {
-                            hamDeficitText = `<span class="deficit">${deficitInfo.ham_deficit} m² EKSİK</span>`;
-                            rowClass = 'style="background-color: #ffdddd;"';
-                        } else if (deficitInfo.ham_coverage > 0) {
-                            hamDeficitText = `<span class="production">(Üretilecek: ${deficitInfo.ham_coverage} m²)</span>`;
-                        }
-                    }
-                }
-
-                html += `<tr ${rowClass}>
-                    <td>${item.cinsi} ${item.kalinlik}</td>
-                    <td>${item.asama}</td>
-                    <td>${stokValue}</td>
-                    <td>${sivaliDeficitText}</td>
-                    <td>${hamDeficitText}</td>
+            // Sadece key/value döngüsü kullanarak API'den gelen basit veriyi işleme
+            for (const [key, value] of Object.entries(stokData)) {
+                html += `<tr>
+                    <td>${key}</td>
+                    <td class="count-cell">${value}</td>
                 </tr>`;
-            });
+            }
 
             html += '</table>';
             document.getElementById('stok-tablosu').innerHTML = html;
         }
 
-        function renderSiparisler(siparisler) {
-            let html = '<table><tr><th>Sipariş Kodu</th><th>Müşteri</th><th>Ürün Kodu</th><th>Termin</th><th>Bekleyen M²</th></tr>';
-            
-            if (siparisler.length === 0) {
-                html += '<tr><td colspan="5">Bekleyen aktif sipariş bulunmamaktadır.</td></tr>';
-            } else {
-                siparisler.forEach(s => {
-                    html += `<tr>
-                        <td>${s.siparis_kodu}</td>
-                        <td>${s.musteri}</td>
-                        <td>${s.urun_kodu} (${s.cinsi} ${s.kalinlik})</td>
-                        <td>${s.termin_tarihi}</td>
-                        <td>${s.bekleyen_m2} m²</td>
-                    </tr>`;
-                });
-            }
-
-            html += '</table>';
-            document.getElementById('siparis-listesi').innerHTML = html;
-        }
+        // Eski sipariş ve detaylı analiz fonksiyonlarını siliyoruz, çünkü API şu an bu verileri sağlamıyor.
+        // function renderSiparisler(siparisler) { ... }
+        // function renderStok(stokData, eksikAnalizi) { ... } // Eski versiyonun yerine yeni renderStok kullanılıyor
     </script>
 </body>
 </html>
