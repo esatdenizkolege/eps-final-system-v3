@@ -541,3 +541,11 @@ def api_stok():
 
 if __name__ == '__main__':
     app.run(debug=True)
+    # --- MOBIL GORUNTULEME ICIN HTML DOSYASINI SUNMA ---
+
+from flask import send_file
+
+@app.route('/stok_goruntule.html')
+def mobil_goruntuleme():
+    # Bu, stok_goruntule.html dosyasını doğrudan sunar
+    return send_file('stok_goruntule.html')
