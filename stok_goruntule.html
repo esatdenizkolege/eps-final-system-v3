@@ -94,9 +94,9 @@
         .count-cell {
             font-weight: bold;
         }
+        /* Sipariş Kodu Mobil Görünümde Gizlendi */
         .siparis-kodu {
-            font-weight: bold;
-            color: #0056b3;
+            display: none;
         }
     </style>
 </head>
@@ -116,18 +116,17 @@
         
         <h2>📋 Tüm Siparişler (Bekleyen & Tamamlanan)</h2>
         <div id="siparis-listesi">
-            </div>
+        </div>
 
     </div>
     
     <script>
-        // Lütfen bu URL'in Render'daki gerçek uygulama URL'iniz olduğundan emin olun!
+        // API'ye erişim adresi
         const API_URL = "https://eps-final-system-v3.onrender.com/api/stok";
 
         document.addEventListener('DOMContentLoaded', fetchData);
 
         async function fetchData() {
-            // Yükleme mesajlarını göster
             document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
             document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
             
@@ -139,7 +138,6 @@
                 }
                 const data = await response.json();
                 
-                // API'den gelen veriler: "stok", "siparisler" (tüm siparişler) ve "deficit_analysis"
                 renderStok(data.stok, data.deficit_analysis); 
                 renderSiparisler(data.siparisler); 
                 
@@ -151,7 +149,7 @@
         }
 
         function renderStok(stokData, deficitAnalysis) {
-            // Düzeltme 2: Başlık Düzeltmesi (Eksik Sipariş -> Eksik Sıvalı M²)
+            // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
             let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sıvalı M²</th><th>Eksik Ham M²</th></tr>';
             
             // Sıralanmış anahtarlar
@@ -199,13 +197,11 @@
                         hamDeficitText = `<span class="deficit-red">${hamDeficit} m² EKSİK</span>`;
                     } 
                     if (hamCoverage > 0) {
-                         // Eğer ham stoku sıvalı eksiğini karşılıyorsa (yani üretim planı varsa)
                          sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${hamCoverage} m²)</span>`;
                     }
                 }
 
-                // DÜZELTME 4: Sıfır Stokları Gizleme Mantığı
-                // Stok değeri 0 değilse VEYA eksik sıvalı sipariş varsa VEYA eksik ham stoğu varsa göster.
+                // Sıfır Stokları Gizleme Mantığı (Sadece Pozitif/Negatif stok veya eksik sipariş varsa göster)
                 if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
                     html += `<tr>
                         <td>${key}</td>
@@ -220,25 +216,40 @@
             document.getElementById('stok-tablosu').innerHTML = html;
         }
 
+        // planlanan_is_gunu API'den siparisler objesi içinde geliyor.
         function renderSiparisler(siparisler) {
-            // Düzeltme 1: Tüm siparişleri gösterir (bekleyen ve tamamlanan)
             const tumSiparisler = siparisler; 
             
-            let html = '<table><tr><th>Kod</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th></tr>';
+            // YENİ BAŞLIKLAR: Sip. Tarihi, Müşteri, Ürün, M², Durum, Termin, Sıvalı Zemin (Gün)
+            let html = '<table><tr><th>Sip. Tarihi</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th><th>Termin</th><th>Sıvalı Zemin (Gün)</th></tr>';
 
             if (tumSiparisler.length === 0) {
-                html += '<tr><td colspan="5" style="text-align:center; color:#666; font-weight:bold;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
+                html += '<tr><td colspan="7" style="text-align:center; color:#666; font-weight:bold;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
             } else {
                 tumSiparisler.forEach(s => {
                     let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
-                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${s.bekleyen_m2} m²` : '0 m² (Tamamlandı)';
+                    // Bekleyen M2: Tamamlandıysa 0 gösterilir.
+                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${s.bekleyen_m2} m²` : '0 m²';
+                    
+                    let planlananGunText = '-';
+                    if (s.durum === 'Bekliyor') {
+                        if (s.planlanan_is_gunu === 0) {
+                            planlananGunText = `<span style="color: green;">Stoktan</span>`;
+                        } else if (s.planlanan_is_gunu > 0) {
+                            planlananGunText = `<b>${s.planlanan_is_gunu} Gün</b>`;
+                        } else {
+                            planlananGunText = `Kapasite Yok`;
+                        }
+                    }
                     
                     html += `<tr>
-                        <td><span class="siparis-kodu">${s.siparis_kodu}</span></td>
+                        <td>${s.siparis_tarihi}</td>
                         <td>${s.musteri}</td>
                         <td>${s.urun_kodu}</td>
                         <td class="count-cell">${bekleyenM2}</td>
                         <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
+                        <td>${s.termin_tarihi}</td>
+                        <td>${planlananGunText}</td>
                     </tr>`;
                 });
             }

@@ -5,11 +5,13 @@ import sqlite3
 import json
 from datetime import datetime
 from collections import defaultdict
+import math # İş günü hesaplama için
 
 # --- UYGULAMA YAPILANDIRMASI ---
 PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__)
 DATABASE = 'envanter_v5.db' 
+KAPASITE_FILE = 'kapasite.json' # Kapasite ayarı için JSON dosyası
 
 # !!! KRİTİK HATA GİDERİCİ SATIR (ÖNBELLEK TEMİZLEME ZORUNLULUĞU) !!!
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 
@@ -37,10 +39,22 @@ CINS_TO_BOYALI_MAP = {
 }
 URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
 
-# --- 1. VERİTABANI İŞLEMLERİ ---
+# --- 1. VERİTABANI VE KAPASİTE İŞLEMLERİ ---
+
+def load_kapasite():
+    """Kapasite ayarını JSON dosyasından yükler."""
+    if os.path.exists(KAPASITE_FILE):
+        with open(KAPASITE_FILE, 'r') as f:
+            return json.load(f)
+    return {"gunluk_siva_m2": 600} # Varsayılan değer
+
+def save_kapasite(data):
+    """Kapasite ayarını JSON dosyasına kaydeder."""
+    with open(KAPASITE_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
 
 def get_db_connection():
-    """Veritabanı bağlantısını açar. Render uyumu için check_same_thread=False eklenmiştir."""
+    """Veritabanı bağlantısını açar."""
     conn = sqlite3.connect(DATABASE, check_same_thread=False) 
     conn.row_factory = sqlite3.Row
     return conn
@@ -60,6 +74,7 @@ def init_db():
         );
     """)
     
+    # planlanan_is_gunu alanı eklendi
     conn.execute("""
         CREATE TABLE IF NOT EXISTS siparisler (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +86,8 @@ def init_db():
             siparis_tarihi DATE NOT NULL,
             termin_tarihi DATE,
             bekleyen_m2 INTEGER,
-            durum TEXT NOT NULL
+            durum TEXT NOT NULL,
+            planlanan_is_gunu INTEGER 
         );
     """)
 
@@ -84,6 +100,10 @@ def init_db():
 
 with app.app_context():
     init_db()
+    # Kapasite dosyası yoksa varsayılanı oluştur
+    if not os.path.exists(KAPASITE_FILE):
+        save_kapasite({"gunluk_siva_m2": 600})
+
 
 def get_next_siparis_kodu(conn):
     """Sıradaki sipariş kodunu oluşturur."""
@@ -109,7 +129,74 @@ def get_next_siparis_kodu(conn):
 
     return f"{prefix}{next_num:04d}"
 
-# --- 5. HTML ŞABLONU (Web Arayüzü) ---
+# --- PLANLAMA MANTIĞI (Yeni) ---
+
+def calculate_planning(conn):
+    """
+    Siparişleri sipariş tarihine göre sıralar, 
+    Eksik Sıvalı M2'yi hesaplar ve 
+    Günlük Kapasiteye göre iş günü planı yapar.
+    """
+    
+    kapasite = load_kapasite()['gunluk_siva_m2']
+    
+    # Ham ve Sıvalı stokları çek (Gerçek stok durumunu yansıtır)
+    stok_map = {}
+    stok_raw = conn.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok").fetchall()
+    for row in stok_raw:
+        key = (row['cinsi'], row['kalinlik'])
+        if key not in stok_map:
+            stok_map[key] = {'Ham': 0, 'Sivali': 0}
+        stok_map[key][row['asama']] = row['m2']
+
+    # 1. Bekleyen siparişleri sipariş tarihine göre ESKİDEN YENİYE sırala (ÖNCELİK)
+    bekleyen_siparisler = conn.execute("""
+        SELECT id, cinsi, kalinlik, bekleyen_m2, urun_kodu, siparis_kodu 
+        FROM siparisler 
+        WHERE durum='Bekliyor' 
+        ORDER BY siparis_tarihi ASC
+    """).fetchall()
+
+    toplam_gerekli_siva = 0 # Sıvalı stoğu karşılanamayan toplam m2 (Üretim Planı özeti için)
+    planlama_sonuclari = {} # {id: iş_günü}
+
+    # 2. Her sipariş için sırayla stok eksikliğini simüle et ve toplam_gerekli_siva'yı güncelle
+    for siparis in bekleyen_siparisler:
+        key = (siparis['cinsi'], siparis['kalinlik'])
+        
+        stok_sivali = stok_map.get(key, {}).get('Sivali', 0)
+        
+        gerekli_m2 = siparis['bekleyen_m2']
+        
+        # Stokta karşılanan kısmı çıkar
+        eksik_sivali = max(0, gerekli_m2 - stok_sivali)
+        
+        # Stok harcamasını simüle et (planlama sonrası kalan stok)
+        stok_map[key]['Sivali'] = max(0, stok_sivali - gerekli_m2)
+
+        # Planlama Sadece Sıvalı Eksik Varsa Çalışır
+        if eksik_sivali > 0:
+            toplam_gerekli_siva += eksik_sivali
+            
+            # 3. İş Günü Hesaplama (Kümülâtif)
+            if kapasite > 0:
+                # Toplam_gerekli_siva'nın, günlük kapasiteye bölünmesiyle kaç iş günü gerektiğini buluruz
+                is_gunu = math.ceil(toplam_gerekli_siva / kapasite)
+            else:
+                is_gunu = -1 # Kapasite 0 veya negatif ise plan yapılamaz
+            
+            planlama_sonuclari[siparis['id']] = is_gunu
+            
+        else:
+            planlama_sonuclari[siparis['id']] = 0 # Stoktan karşılanıyor (0 gün)
+
+    # 4. Siparişler tablosunu güncel Planlanan İş Günü ile güncelle
+    for siparis_id, is_gunu in planlama_sonuclari.items():
+        conn.execute("UPDATE siparisler SET planlanan_is_gunu = ? WHERE id = ?", (is_gunu, siparis_id))
+    
+    return planlama_sonuclari, toplam_gerekli_siva, kapasite
+
+# --- HTML ŞABLONU (Web Arayüzü) ---
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -135,6 +222,7 @@ HTML_TEMPLATE = """
         button { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
         button:hover { background-color: #0056b3; }
         input[type="number"], input[type="text"], input[type="date"], select { padding: 6px; margin-right: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        .kapasite-box { background-color: #ffcc99; padding: 10px; border-radius: 5px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -150,6 +238,18 @@ HTML_TEMPLATE = """
             
             <div class="form-section">
                 <h2>1. Stok Hareketleri (Üretim/Alım/Satış/İptal)</h2>
+                
+                <div class="kapasite-box">
+                    <h3>⚙️ Günlük Sıva Kapasitesi Ayarı</h3>
+                    <form action="/ayarla/kapasite" method="POST" style="display:flex; align-items:center;">
+                        <input type="number" name="kapasite_m2" min="1" required placeholder="M2" value="{{ gunluk_siva_m2 }}" style="width: 80px;">
+                        <span style="margin-right: 10px;">m² / Gün</span>
+                        <button type="submit" style="background-color:#cc8400;">Kapasiteyi Kaydet</button>
+                    </form>
+                </div>
+                
+                <hr style="margin-top: 15px; margin-bottom: 15px;">
+                
                 <form action="/islem" method="POST">
                     <select name="action" required>
                         <option value="ham_alim">1 - Ham Panel Alımı (Stoğa Ekle)</option>
@@ -213,6 +313,14 @@ HTML_TEMPLATE = """
             
         </div>
         
+        <h2 style="color: #00a359;">🚀 Üretim Planlama Özeti (Kapasite: {{ gunluk_siva_m2 }} m²/gün)</h2>
+        {% if toplam_gerekli_siva > 0 %}
+             <p style="font-weight: bold; color: darkred;">Mevcut siparişleri karşılamak için toplam Sıvalı M² eksiği: {{ toplam_gerekli_siva }} m²</p>
+        {% else %}
+             <p style="font-weight: bold; color: green;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.</p>
+        {% endif %}
+
+        
         <h2>3. Detaylı Stok Durumu ve Eksik Planlama (M²)</h2>
         <table>
             <tr><th>Cinsi</th><th>Kalınlık</th><th>Aşama</th><th>M² Stok</th><th>Eksik Sipariş M²</th><th>Eksik Ham M²</th></tr>
@@ -262,7 +370,7 @@ HTML_TEMPLATE = """
         
         <h2>4. Bekleyen ve Tamamlanan Siparişler (M²)</h2>
         <table>
-            <tr><th>ID</th><th>Sipariş Kodu</th><th>Müşteri</th><th>Ürün (Boyalı Kod)</th><th>Cins/Kalınlık</th><th>Sipariş Tarihi</th><th>Termin Tarihi</th><th>Bekleyen M²</th><th>Durum</th><th>İşlem</th></tr>
+            <tr><th>ID</th><th>Sipariş Kodu</th><th>Müşteri</th><th>Ürün (Boyalı Kod)</th><th>Cins/Kalınlık</th><th>Sipariş Tarihi</th><th>Termin Tarihi</th><th>Bekleyen M²</th><th>Durum</th><th>Sıvalı Zemin (Gün)</th><th>İşlem</th></tr>
             {% for s in siparisler %}
                 <tr>
                     <td>{{ s['id'] }}</td>
@@ -271,13 +379,26 @@ HTML_TEMPLATE = """
                     <td>{{ s['urun_kodu'] }}</td>
                     <td>{{ s['cinsi'] }} {{ s['kalinlik'] }}</td>
                     <td>{{ s['siparis_tarihi'] }}</td>
-                    <td>{{ s['termin_tarihi'] }}</td>
+                    <td><b>{{ s['termin_tarihi'] }}</b></td>
                     <td>{{ s['bekleyen_m2'] }} m²</td>
                     <td>
                         {% if s['durum'] == 'Bekliyor' %}
                             <span style="color:red; font-weight:bold;">BEKLİYOR</span>
                         {% else %}
                             <span style="color:green;">{{ s['durum'] }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                         {% if s['durum'] == 'Bekliyor' %}
+                            {% if s['planlanan_is_gunu'] == 0 %}
+                                <span style="color: green;">Stoktan Karşılanıyor</span>
+                            {% elif s['planlanan_is_gunu'] > 0 %}
+                                <b>{{ s['planlanan_is_gunu'] }} Gün</b>
+                            {% else %}
+                                Kapasite Yetersiz
+                            {% endif %}
+                        {% else %}
+                            -
                         {% endif %}
                     </td>
                     <td>
@@ -345,8 +466,19 @@ HTML_TEMPLATE = """
 @app.route('/', methods=['GET', 'POST'])
 def index():
     conn = get_db_connection()
+    
+    # Kapasite Yükleme
+    kapasite_data = load_kapasite()
+    gunluk_siva_m2 = kapasite_data['gunluk_siva_m2']
+    
+    # Önce Planlamayı Hesapla ve Kaydet
+    planlama_sonuclari, toplam_gerekli_siva, kapasite = calculate_planning(conn)
+    conn.commit() # Planlanan iş günlerini kalıcı olarak kaydet
+    
+    # Verileri Çek
     stok_raw = conn.execute("SELECT * FROM stok ORDER BY cinsi, kalinlik, asama").fetchall()
-    siparisler = conn.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC").fetchall()
+    # Siparişleri planlanan iş günü bilgisiyle çekiyoruz ve sipariş tarihine göre sıralı.
+    siparisler = conn.execute("SELECT *, planlanan_is_gunu FROM siparisler ORDER BY siparis_tarihi ASC").fetchall()
     
     deficit_analysis = calculate_deficit(conn) 
     next_siparis_kodu = get_next_siparis_kodu(conn)
@@ -365,8 +497,25 @@ def index():
                                           today=today,
                                           next_siparis_kodu=next_siparis_kodu,
                                           cins_to_boyali_map=CINS_TO_BOYALI_MAP,
+                                          gunluk_siva_m2=gunluk_siva_m2, 
+                                          toplam_gerekli_siva=toplam_gerekli_siva, 
                                           message=request.args.get('message'))
     return html_content
+
+@app.route('/ayarla/kapasite', methods=['POST'])
+def ayarla_kapasite():
+    """Günlük sıva kapasitesini ayarlar."""
+    try:
+        yeni_kapasite = int(request.form['kapasite_m2'])
+        if yeni_kapasite <= 0:
+             raise ValueError("Kapasite pozitif bir sayı olmalıdır.")
+        
+        save_kapasite({"gunluk_siva_m2": yeni_kapasite})
+        return redirect(url_for('index', message=f"✅ Günlük Sıva Kapasitesi **{yeni_kapasite} m²** olarak güncellendi."))
+        
+    except Exception as e:
+        return redirect(url_for('index', message=f"Hata: Kapasite ayarı yapılamadı. {e}"))
+
 
 @app.route('/islem', methods=['POST'])
 def islem():
@@ -389,20 +538,15 @@ def islem():
         elif action == 'sat_sivali':
             message = process_sale(conn, cinsi, kalinlik, 'Sivali', m2)
         
-        # --- İPTAL İŞLEMLERİ (YENİ EKLENDİ) ---
+        # --- İPTAL İŞLEMLERİ ---
         elif action == 'iptal_ham_alim':
-            # Ham Alımını İptal Etmek, Ham Satışı (Stoktan Çıkarma) yapmaktır.
             message = process_sale(conn, cinsi, kalinlik, 'Ham', m2, is_undo=True) 
         elif action == 'iptal_sat_ham':
-            # Ham Satışını Geri Almak, Ham Alımı (Stoğa Ekleme) yapmaktır.
             message = process_ham_alim(conn, cinsi, kalinlik, m2, is_undo=True)
         elif action == 'iptal_sat_sivali':
-            # Sıvalı Satışını Geri Almak, Sıvalı Stoğa Ekleme yapmaktır.
             message = process_sale_undo(conn, cinsi, kalinlik, 'Sivali', m2)
         elif action == 'iptal_siva':
-            # Sıva işlemini geri almak (Sıvalı -> Ham)
             message = process_siva_undo(conn, cinsi, kalinlik, m2)
-
         
         conn.commit()
         return redirect(url_for('index', message=message))
@@ -429,6 +573,7 @@ def siparis_islem():
             siparis_tarihi = request.form['siparis_tarihi']
             termin_tarihi = request.form['termin_tarihi']
             
+            # planlanan_is_gunu 0 olarak eklenir, calculate_planning fonksiyonu günceller.
             message = add_siparis(conn, siparis_kodu, urun_kodu, cinsi, kalinlik, m2, musteri, siparis_tarihi, termin_tarihi)
         
         elif action == 'siparis_karsila':
@@ -448,6 +593,7 @@ def siparis_islem():
         return redirect(url_for('index', message=f"Hata: {e}"))
 
 # --- 3. İŞLEM MANTIKLARI ---
+# calculate_planning yukarı taşındı.
 
 def calculate_deficit(conn):
     """İki seviyeli (Sıvalı ve Ham) kümülatif eksikliği M2 cinsinden hesaplar."""
@@ -506,28 +652,22 @@ def process_sale(conn, cinsi, kalinlik, asama, m2, is_undo=False):
     stok_row = conn.execute("SELECT m2 FROM stok WHERE cinsi = ? AND kalinlik = ? AND asama = ?", (cinsi, kalinlik, asama)).fetchone()
     
     if asama == 'Ham' and is_undo: # Ham alım iptali için stok kontrolü
-        message_prefix = "Ham Alımı İptali"
         if not stok_row or stok_row['m2'] < m2:
              raise Exception(f"Yetersiz Ham Stok: Ham Alımını {m2} m² geri almak için stokta sadece {stok_row['m2'] if stok_row else 0} mevcut.")
     elif not is_undo: # Normal satış için stok kontrolü
-        message_prefix = f"{asama} Panel Satışı"
         if not stok_row or stok_row['m2'] < m2:
             raise Exception(f"Yetersiz {asama} Stok: Satış için {m2} m² gerekiyor, sadece {stok_row['m2'] if stok_row else 0} mevcut.")
-    else:
-         # is_undo=False için varsayılan mesaj
-        message_prefix = f"{asama} Panel Satışı"
 
     conn.execute("UPDATE stok SET m2 = m2 - ? WHERE cinsi = ? AND kalinlik = ? AND asama = ?", (m2, cinsi, kalinlik, asama))
     
     if is_undo and asama == 'Ham':
          return f"✅ {m2} m² {cinsi} {kalinlik} Ham Alımı İPTAL edildi. Ham Stoktan Düşüldü."
-    elif is_undo:
-        # Bu fonksiyon normalde iptal için kullanılmaz, sadece Ham Alım İptali için buraya girdi.
-        pass
-        
-    return f"✅ {m2} m² {cinsi} {kalinlik} {asama} Panel başarıyla SATILDI."
+    elif not is_undo:
+        return f"✅ {m2} m² {cinsi} {kalinlik} {asama} Panel başarıyla SATILDI."
+    
+    return f"İşlem başarılı." # should not be reached
 
-# --- YENİ GERİ ALMA İŞLEM MANTIKLARI ---
+# --- GERİ ALMA İŞLEM MANTIKLARI ---
 def process_sale_undo(conn, cinsi, kalinlik, asama, m2):
     """Satış işlemini (stoktan çıkarma) geri alır (stoğa ekler)."""
     conn.execute("UPDATE stok SET m2 = m2 + ? WHERE cinsi = ? AND kalinlik = ? AND asama = ?", (m2, cinsi, kalinlik, asama))
@@ -542,13 +682,14 @@ def process_siva_undo(conn, cinsi, kalinlik, m2):
     conn.execute("UPDATE stok SET m2 = m2 - ? WHERE cinsi = ? AND kalinlik = ? AND asama = 'Sivali'", (m2, cinsi, kalinlik))
     conn.execute("UPDATE stok SET m2 = m2 + ? WHERE cinsi = ? AND kalinlik = ? AND asama = 'Ham'", (m2, cinsi, kalinlik))
     return f"✅ {m2} m² {cinsi} {kalinlik} panelden SIVA İŞLEMİ GERİ ALINDI (Sıvalı -> Ham)."
-# --- YENİ GERİ ALMA İŞLEM MANTIKLARI SONU ---
+# --- GERİ ALMA İŞLEM MANTIKLARI SONU ---
 
 
 def add_siparis(conn, siparis_kodu, urun_kodu, cinsi, kalinlik, m2, musteri, siparis_tarihi, termin_tarihi):
+    # planlanan_is_gunu 0 olarak eklenir, calculate_planning fonksiyonu günceller.
     conn.execute("""
-        INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, bekleyen_m2, durum, musteri, siparis_tarihi, termin_tarihi)
-        VALUES (?, ?, ?, ?, ?, 'Bekliyor', ?, ?, ?)
+        INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, bekleyen_m2, durum, musteri, siparis_tarihi, termin_tarihi, planlanan_is_gunu)
+        VALUES (?, ?, ?, ?, ?, 'Bekliyor', ?, ?, ?, 0)
     """, (siparis_kodu, urun_kodu, cinsi, kalinlik, m2, musteri, siparis_tarihi, termin_tarihi))
     return f"✅ Sipariş {siparis_kodu} ({urun_kodu}) {m2} m² olarak {musteri} adına eklendi."
     
@@ -576,20 +717,24 @@ def delete_siparis(conn, siparis_id):
     conn.execute("DELETE FROM siparisler WHERE id = ?", (siparis_id,))
     return f"❌ Sipariş ID: {siparis_id} başarıyla SİLİNDİ."
     
-# --- 4. MOBİL İÇİN API UÇ NOKTASI (Nihai Veri Çıktısı) ---
+# --- 4. MOBİL İÇİN API UÇ NOKTASI ---
 
 @app.route('/api/stok')
 def api_stok():
     conn = get_db_connection()
     try:
+        # Kapasite ve Planlamayı Hesapla (planlanan_is_gunu DB'ye yazılır)
+        planlama_sonuclari, toplam_gerekli_siva, kapasite = calculate_planning(conn)
+        conn.commit()
+        
         # Stok verisi
         stok = conn.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok").fetchall()
         
         # Eksik Analizi Verisini Çekme (Mobil görünüm için gerekli)
         deficit_analysis = calculate_deficit(conn) 
 
-        # Tüm Sipariş verisi çekimi (Hem bekleyen hem tamamlanan)
-        siparisler = conn.execute("SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2, durum FROM siparisler ORDER BY termin_tarihi ASC").fetchall()
+        # Tüm Sipariş verisi çekimi (planlanan_is_gunu bilgisi çekiliyor)
+        siparisler = conn.execute("SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2, durum, siparis_tarihi, termin_tarihi, planlanan_is_gunu FROM siparisler ORDER BY siparis_tarihi ASC").fetchall()
         
         # Stokları basit {Anahtar: Adet} formatına çevirme
         stok_data = {}
@@ -609,7 +754,9 @@ def api_stok():
         response_data = {
             "stok": stok_data,
             "siparisler": siparis_list,
-            "deficit_analysis": deficit_json_ready 
+            "deficit_analysis": deficit_json_ready,
+            "gunluk_siva_m2": kapasite, 
+            "toplam_gerekli_siva": toplam_gerekli_siva 
         }
         
         return json.dumps(response_data)
