@@ -284,7 +284,6 @@ HTML_TEMPLATE = """
                                 <input type="hidden" name="siparis_id" value="{{ s['id'] }}">
                                 <button type="submit" style="background-color:#cc8400;">UV Baskı & Tamamla</button>
                             </form>
-                            <!-- SİL BUTONU -->
                             <form action="/siparis" method="POST" style="display:inline; margin-left: 5px;">
                                 <input type="hidden" name="action" value="siparis_sil">
                                 <input type="hidden" name="siparis_id" value="{{ s['id'] }}">
@@ -322,6 +321,7 @@ HTML_TEMPLATE = """
             } else {
                 validCodes.forEach(code => {
                     const option = document.createElement('option');
+                    const option = document.createElement('option');
                     option.value = code;
                     option.text = code;
                     urunKoduSelect.add(option);
@@ -339,7 +339,7 @@ HTML_TEMPLATE = """
 """
 
 # --- 2. WEB ARAYÜZÜ ROUTE'LARI ---
-
+# ... (Bu kısım aynı kalır)
 @app.route('/', methods=['GET', 'POST'])
 def index():
     conn = get_db_connection()
@@ -431,7 +431,7 @@ def siparis_islem():
         return redirect(url_for('index', message=f"Hata: {e}"))
 
 # --- 3. İŞLEM MANTIKLARI ---
-
+# ... (Bu kısım aynı kalır)
 def calculate_deficit(conn):
     """İki seviyeli (Sıvalı ve Ham) kümülatif eksikliği M2 cinsinden hesaplar."""
     bekleyen_siparis = conn.execute("""
@@ -519,7 +519,7 @@ def delete_siparis(conn, siparis_id):
     return f"❌ Sipariş ID: {siparis_id} başarıyla SİLİNDİ."
     
 # --- 4. MOBİL İÇİN API UÇ NOKTASI (Nihai Veri Çıktısı) ---
-
+# ... (Bu kısım aynı kalır)
 @app.route('/api/stok')
 def api_stok():
     conn = get_db_connection()
@@ -574,11 +574,3 @@ def mobil_goruntuleme():
 # Yerel çalıştırma kısmı (Render'da Gunicorn kullanıldığı için bu satırlar kullanılmaz)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=True)
-
-
-### 📄 2. `stok_goruntule.html` (Nihai Kod)
-
-Bu kod, API'yi tam Render adresiyle çağırır ve boş sayfa hatasını çözer. Lütfen bu kodu `stok_goruntule.html` dosyanızdaki her şeyi silerek yerine yapıştırın.
-
-
-http://googleusercontent.com/immersive_entry_chip/0 
