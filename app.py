@@ -7,18 +7,18 @@ from datetime import datetime
 from collections import defaultdict
 
 # --- UYGULAMA YAPILANDIRMASI ---
-# Render portunu al, yoksa yerel test için 5000 kullan
 PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__)
 DATABASE = 'envanter_v5.db' 
 
+# !!! KRİTİK HATA GİDERİCİ SATIR (ÖNBELLEK TEMİZLEME ZORUNLULUĞU) !!!
+# Bu, mobil tarayıcıların stok_goruntule.html dosyasını her zaman yeniden indirmesini sağlar (304 hatası çözümü).
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 
+
 # --- 0. SABİT TANIMLAMALAR ---
-# Kalınlıklar ve Cinsler (Sizin Projenizden Alınmıştır)
 KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
 CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-
-# Cins ve Kalınlığa göre Boyalı Ürün Kodları Haritası
 CINS_TO_BOYALI_MAP = {
     'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
     'PARKE TAŞ 2 CM': ['PT001', 'PT002', 'PT003', 'PT004', 'PT005', 'PT006', 'PT007', 'PT008', 'PT009', 'PT010', 'PT011', 'PT012', 'PT013', 'PT014', 'PT015', 'PT016', 'PT017', 'PT018', 'PT019', 'PT020', 'PT021', 'PT022', 'PT023', 'PT024', 'PT025', 'PT026', 'PT027', 'PT028', 'PT029', 'PT030'],
@@ -42,7 +42,6 @@ URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for
 
 def get_db_connection():
     """Veritabanı bağlantısını açar. Render uyumu için check_same_thread=False eklenmiştir."""
-    # check_same_thread=False, Gunicorn gibi çoklu iş parçacığı kullanan sunucular için kritik bir düzeltmedir.
     conn = sqlite3.connect(DATABASE, check_same_thread=False) 
     conn.row_factory = sqlite3.Row
     return conn
@@ -111,7 +110,7 @@ def get_next_siparis_kodu(conn):
 
     return f"{prefix}{next_num:04d}"
 
-# --- 5. HTML ŞABLONU (Sil Butonu Dahil) ---
+# --- 5. HTML ŞABLONU (Web Arayüzü) ---
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -575,3 +574,11 @@ def mobil_goruntuleme():
 # Yerel çalıştırma kısmı (Render'da Gunicorn kullanıldığı için bu satırlar kullanılmaz)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT, debug=True)
+
+
+### 📄 2. `stok_goruntule.html` (Nihai Kod)
+
+Bu kod, API'yi tam Render adresiyle çağırır ve boş sayfa hatasını çözer. Lütfen bu kodu `stok_goruntule.html` dosyanızdaki her şeyi silerek yerine yapıştırın.
+
+
+http://googleusercontent.com/immersive_entry_chip/0 
