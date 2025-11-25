@@ -53,21 +53,21 @@
         th {
             background-color: #007bff;
             color: white;
-            position: sticky; /* Mobil kaydırma için başlık sabitlenir */
+            position: sticky; 
             top: 0;
             z-index: 10;
         }
         /* Durum Renklendirmeleri */
         .status-bekliyor {
             color: white;
-            background-color: #dc3545; /* Kırmızı */
+            background-color: #dc3545; 
             padding: 2px 6px;
             border-radius: 4px;
             font-weight: bold;
         }
         .status-tamamlandi {
             color: white;
-            background-color: #28a745; /* Yeşil */
+            background-color: #28a745; 
             padding: 2px 6px;
             border-radius: 4px;
             font-weight: bold;
@@ -94,9 +94,14 @@
         .count-cell {
             font-weight: bold;
         }
-        /* Sipariş Kodu Mobil Görünümde Gizlendi */
         .siparis-kodu {
             display: none;
+        }
+        .plan-box { 
+            background-color: #e9fff5; 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin-bottom: 15px;
         }
     </style>
 </head>
@@ -107,6 +112,9 @@
         <button onclick="fetchData()" style="margin-bottom: 15px; background-color:#28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; width: 100%;">
             🔄 Verileri Yenile
         </button>
+        
+        <div id="plan-ozeti">
+            </div>
 
         <h2>📦 Stok ve Üretim Eksik Analizi (M²)</h2>
         <p style="font-size: 0.8em; color: #666;">*Sıralama: Cins/Kalınlık ve Aşama (Ham/Sıvalı)</p>
@@ -127,6 +135,7 @@
         document.addEventListener('DOMContentLoaded', fetchData);
 
         async function fetchData() {
+            document.getElementById('plan-ozeti').innerHTML = '<div class="loading" style="background: none;">Planlama verileri çekiliyor...</div>';
             document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
             document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
             
@@ -138,6 +147,7 @@
                 }
                 const data = await response.json();
                 
+                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
                 renderStok(data.stok, data.deficit_analysis); 
                 renderSiparisler(data.siparisler); 
                 
@@ -147,6 +157,59 @@
                 document.getElementById('siparis-listesi').innerHTML = '';
             }
         }
+        
+        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
+            let html = `<h2 style="color: #00a359;">🚀 Üretim Planlama (Kapasite: ${kapasite} m²/gün)</h2>`;
+
+            if (toplam_eksi_m2 > 0) {
+                html += `<p style="font-weight: bold; color: darkred; font-size: 0.9em;">Toplam Sıva M² Eksiği: ${toplam_eksi_m2} m²</p>`;
+            } else {
+                 html += `<p style="font-weight: bold; color: green; font-size: 0.9em;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.</p>`;
+            }
+            
+            html += `
+            <div style="display: flex; gap: 10px;">
+                <div class="plan-box" style="flex: 1; background-color: #d8f5ff; border: 1px solid #17a2b8;">
+                    <h3>Sıva Üretim Planı (5 Gün)</h3>
+                    <table>`;
+                    const sivaKeys = Object.keys(sivaPlan);
+                    if (sivaKeys.length > 0) {
+                        sivaKeys.forEach(gun => {
+                            html += `<tr><td>Gün ${gun}</td><td>${sivaPlan[gun]} m²</td></tr>`;
+                        });
+                    } else {
+                        html += `<tr><td colspan="2">İhtiyaç yok.</td></tr>`;
+                    }
+                    html += `</table>
+                </div>
+
+                <div class="plan-box" style="flex: 1; background-color: #fff0d8; border: 1px solid #cc8400;">
+                    <h3>Sevkiyat Planı (5 Gün)</h3>`;
+                    const sevkiyatKeys = Object.keys(sevkiyatPlan);
+                    if (sevkiyatKeys.length > 0) {
+                        sevkiyatKeys.forEach(tarih => {
+                            const sevkiyatlar = sevkiyatPlan[tarih];
+                            const toplamM2 = sevkiyatlar.reduce((sum, s) => sum + s.bekleyen_m2, 0);
+
+                            html += `
+                                <h4 style="margin: 5px 0 2px 0; color: #0056b3; font-size: 0.9em;">${tarih} (${toplamM2} m²)</h4>
+                                <ul style="list-style: none; padding: 0; margin-left: 5px; font-size: 0.8em;">`;
+                                    sevkiyatlar.forEach(s => {
+                                        html += `<li>- ${s.urun_kodu}: ${s.bekleyen_m2} m² (${s.musteri})</li>`;
+                                    });
+                            html += `</ul>`;
+                        });
+                    } else {
+                        html += `<p style="font-size: 0.9em;">Önümüzdeki 5 gün terminli sevkiyat yok.</p>`;
+                    }
+
+                    html += `
+                </div>
+            </div>`;
+
+            document.getElementById('plan-ozeti').innerHTML = html;
+        }
+
 
         function renderStok(stokData, deficitAnalysis) {
             // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
@@ -228,7 +291,6 @@
             } else {
                 tumSiparisler.forEach(s => {
                     let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
-                    // Bekleyen M2: Tamamlandıysa 0 gösterilir.
                     let bekleyenM2 = s.durum === 'Bekliyor' ? `${s.bekleyen_m2} m²` : '0 m²';
                     
                     let planlananGunText = '-';
