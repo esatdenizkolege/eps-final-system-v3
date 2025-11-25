@@ -117,8 +117,7 @@
     </div>
     
     <script>
-        // CRITICAL FIX: URL çözümleme hatasını gidermek için tam Render URL'i kodlanmıştır.
-        // Bu URL'i, Render'daki canlı uygulamanızın gerçek URL'i ile değiştirmeniz gerekebilir.
+        // Lütfen bu URL'in Render'daki gerçek uygulama URL'iniz olduğundan emin olun!
         const API_URL = "https://eps-final-system-v3.onrender.com/api/stok";
 
         document.addEventListener('DOMContentLoaded', fetchData);
@@ -138,17 +137,18 @@
                 
                 // API'den gelen veriler: "stok", "siparisler" (tüm siparişler) ve "deficit_analysis"
                 renderStok(data.stok, data.deficit_analysis); 
-                renderSiparisler(data.siparisler);
-
+                renderSiparisler(data.siparisler); // TÜM SİPARİŞLERİ GÖSTERMEK İÇİN GEREKLİ DÜZELTME
+                
             } catch (error) {
                 console.error("Fetch Error:", error); 
-                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor. Lütfen URL'i kontrol edin.</div>`;
+                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor veya veri formatı hatalı.</div>`;
                 document.getElementById('siparis-listesi').innerHTML = '';
             }
         }
 
         function renderStok(stokData, deficitAnalysis) {
-            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sipariş</th><th>Eksik Ham</th></tr>';
+            // BAŞLIK DÜZELTMESİ (Eksik Sipariş -> Eksik Sıvalı)
+            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sıvalı M²</th><th>Eksik Ham M²</th></tr>';
             
             // Sıralanmış anahtarlar (Ham ve Sıvalı yan yana gelecek şekilde)
             const sortedKeys = Object.keys(stokData).sort((a, b) => {
@@ -167,32 +167,29 @@
                 const value = stokData[key];
                 
                 // key: "BAROK 2 CM (Ham)", "BAROK 2 CM (Sivali)"
-                // itemKey: "BAROK 2 CM"
                 const itemKey = key.substring(0, key.lastIndexOf(' (')); 
-                // asama: "Ham" veya "Sivali"
                 const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
                 const deficitInfo = deficitAnalysis[itemKey]; 
                 
                 let sivaliDeficitText = '-';
                 let hamDeficitText = '-';
 
-                // SIVALI Satırı
+                // SIVALI Satırı (Eksik Sıvalı sipariş miktarını gösterir)
                 if (asama === 'Sivali' && deficitInfo) {
                     if (deficitInfo.sivali_deficit > 0) {
                         sivaliDeficitText = `<span class="deficit-red">${deficitInfo.sivali_deficit} m² EKSİK</span>`;
                     }
                 } 
                 
-                // HAM Satırı
+                // HAM Satırı (Ham stoktan karşılanabilecek miktarı veya Ham eksikliğini gösterir)
                 if (asama === 'Ham' && deficitInfo) {
                     // Siparişin karşılanması için gerekli ama stokta olmayan ham miktarı
                     if (deficitInfo.ham_deficit > 0) {
                         hamDeficitText = `<span class="deficit-red">${deficitInfo.ham_deficit} m² EKSİK</span>`;
                     } 
-                    // Mevcut ham stok ile karşılanabilecek sipariş miktarı (sadece bilgilendirme)
+                    // Mevcut ham stok ile karşılanabilecek sipariş miktarı (Üretim Planı)
                     if (deficitInfo.ham_coverage > 0) {
-                         // Eğer ham eksik yoksa veya zaten karşılanıyorsa üretim planını göster
-                        sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${deficitInfo.ham_coverage} m²)</span>`;
+                         sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${deficitInfo.ham_coverage} m²)</span>`;
                     }
                 }
 
@@ -210,15 +207,15 @@
         }
 
         function renderSiparisler(siparisler) {
-            // Sadece bekleyen siparişleri göster
-            const bekleyenSiparisler = siparisler.filter(s => s.durum === 'Bekliyor');
+            // DÜZELTME 1: Tüm siparişleri gösterir (bekleyen ve tamamlanan)
+            const tumSiparisler = siparisler; 
             
             let html = '<table><tr><th>Kod</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th></tr>';
 
-            if (bekleyenSiparisler.length === 0) {
-                html += '<tr><td colspan="5" style="text-align:center; color:green; font-weight:bold;">Tebrikler! Bekleyen sipariş bulunmamaktadır.</td></tr>';
+            if (tumSiparisler.length === 0) {
+                html += '<tr><td colspan="5" style="text-align:center; color:#666; font-weight:bold;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
             } else {
-                bekleyenSiparisler.forEach(s => {
+                tumSiparisler.forEach(s => {
                     let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
                     
                     html += `<tr>
