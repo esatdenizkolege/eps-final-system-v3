@@ -1,323 +1,359 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobil Stok & Sipariş Takip</title>
-    
-    <style>
-        /* --- MOBİL İÇİN DİKEY VE BASİT CSS --- */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 10px;
-            background-color: #f0f2f5;
-            color: #333;
-        }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            color: #007bff;
-            font-size: 1.5em;
-            text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 5px;
-            border-bottom: 2px solid #007bff;
-        }
-        h2 {
-            font-size: 1.2em;
-            color: #333;
-            margin-top: 25px;
-            margin-bottom: 10px;
-            padding: 5px 0;
-            border-bottom: 1px solid #ddd;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-            font-size: 0.9em;
-        }
-        th, td {
-            border: 1px solid #e0e0e0;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #007bff;
-            color: white;
-            position: sticky; 
-            top: 0;
-            z-index: 10;
-        }
-        /* Durum Renklendirmeleri */
-        .status-bekliyor {
-            color: white;
-            background-color: #dc3545; 
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        .status-tamamlandi {
-            color: white;
-            background-color: #28a745; 
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        /* Defisit Renklendirmeleri */
-        .deficit-red {
-            color: #dc3545;
-            font-weight: bold;
-        }
-        .production-blue {
-            color: #007bff;
-            font-style: italic;
-        }
-        .loading, .error {
-            text-align: center;
-            padding: 20px;
-            font-size: 1.1em;
-            border-radius: 5px;
-        }
-        .error {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .count-cell {
-            font-weight: bold;
-        }
-        .siparis-kodu {
-            display: none;
-        }
-        .plan-box { 
-            background-color: #e9fff5; 
-            padding: 10px; 
-            border-radius: 5px; 
-            margin-bottom: 15px;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobil Stok & Sipariş Takip</title>
+    
+    <style>
+        /* --- MOBİL İÇİN DİKEY VE BASİT CSS --- */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #007bff;
+            font-size: 1.5em;
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #007bff;
+        }
+        h2 {
+            font-size: 1.2em;
+            color: #333;
+            margin-top: 25px;
+            margin-bottom: 10px;
+            padding: 5px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            font-size: 0.9em;
+        }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+            position: sticky; 
+            top: 0;
+            z-index: 10;
+        }
+        /* Durum Renklendirmeleri */
+        .status-bekliyor {
+            color: white;
+            background-color: #dc3545; 
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status-tamamlandi {
+            color: white;
+            background-color: #28a745; 
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        /* Defisit Renklendirmeleri */
+        .deficit-red {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .production-blue {
+            color: #007bff;
+            font-style: italic;
+        }
+        .loading, .error {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.1em;
+            border-radius: 5px;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .count-cell {
+            font-weight: bold;
+        }
+        /* Sipariş Kodu Mobil Görünümde Gizlendi */
+        .siparis-kodu {
+            display: none;
+        }
+        .plan-box { 
+            background-color: #e9fff5; 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin-bottom: 15px;
+        }
+        #refreshButton:disabled {
+            background-color: #ffc107;
+            color: #333;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📱 Mobil Stok & Sipariş Takip</h1>
+    <div class="container">
+        <h1>📱 Mobil Stok & Sipariş Takip</h1>
+        
+        <button id="refreshButton" onclick="fetchData()" style="margin-bottom: 15px; background-color:#28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; width: 100%;">
+            🔄 Verileri Yenile
+        </button>
+
+        <div id="plan-ozeti">
+            <div class="loading" style="background: none;">Planlama verileri çekiliyor...</div>
+        </div>
+
+        <h2>📦 Stok ve Üretim Eksik Analizi (M²)</h2>
+        <p style="font-size: 0.8em; color: #666;">*Sıralama: Cins/Kalınlık ve Aşama (Ham/Sıvalı)</p>
+        <div id="stok-tablosu">
+            <div class="loading">Veriler çekiliyor...</div>
+        </div>
+        
+        <h2>📋 Tüm Siparişler (Bekleyen & Tamamlanan)</h2>
+        <div id="siparis-listesi">
+        </div>
+
+    </div>
+    
+    <script>
+        // API'ye erişim adresi
+        const API_URL = "https://eps-final-system-v3.onrender.com/api/stok";
+        const refreshButton = document.getElementById('refreshButton');
+
+        document.addEventListener('DOMContentLoaded', fetchData);
         
-        <button onclick="fetchData()" style="margin-bottom: 15px; background-color:#28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; width: 100%;">
-            🔄 Verileri Yenile
-        </button>
-        
-        <div id="plan-ozeti">
-            </div>
+        // Yardımcı Fonksiyon: Sayıları okunaklı hale getirir
+        function formatM2(m2) {
+            if (m2 === null || m2 === undefined) return '0';
+            // Sayıyı Türkiye formatında (binlik ayracı nokta) ve tam sayı olarak döndür
+            return parseFloat(m2).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+        }
 
-        <h2>📦 Stok ve Üretim Eksik Analizi (M²)</h2>
-        <p style="font-size: 0.8em; color: #666;">*Sıralama: Cins/Kalınlık ve Aşama (Ham/Sıvalı)</p>
-        <div id="stok-tablosu">
-            <div class="loading">Veriler çekiliyor...</div>
-        </div>
-        
-        <h2>📋 Tüm Siparişler (Bekleyen & Tamamlanan)</h2>
-        <div id="siparis-listesi">
-        </div>
 
-    </div>
-    
-    <script>
-        // API'ye erişim adresi
-        const API_URL = "https://eps-final-system-v3.onrender.com/api/stok";
+        async function fetchData() {
+            // --- İyileştirme 1: Butonu Kitleme ve Yükleme Mesajları ---
+            refreshButton.disabled = true;
+            refreshButton.textContent = '⏳ Veriler Yükleniyor...';
 
-        document.addEventListener('DOMContentLoaded', fetchData);
-
-        async function fetchData() {
-            document.getElementById('plan-ozeti').innerHTML = '<div class="loading" style="background: none;">Planlama verileri çekiliyor...</div>';
-            document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
-            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
+            // Yükleme mesajlarını göster
+            document.getElementById('plan-ozeti').innerHTML = '<div class="loading" style="background: none;">Planlama verileri çekiliyor...</div>';
+            document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
+            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
+            
+            let success = false;
             
-            try {
-                const response = await fetch(API_URL);
-                
-                if (!response.ok) {
-                    throw new Error(`API erişim hatası: HTTP ${response.status}`);
-                }
-                const data = await response.json();
-                
-                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
-                renderStok(data.stok, data.deficit_analysis); 
-                renderSiparisler(data.siparisler); 
-                
-            } catch (error) {
-                console.error("Fetch Error:", error); 
-                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor veya veri formatı hatalı.</div>`;
-                document.getElementById('siparis-listesi').innerHTML = '';
+            try {
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`API erişim hatası: HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                
+                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
+                renderStok(data.stok, data.deficit_analysis); 
+                renderSiparisler(data.siparisler); 
+                success = true;
+                
+            } catch (error) {
+                console.error("Fetch Error:", error); 
+                document.getElementById('stok-tablosu').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor veya veri formatı hatalı. (${error.message})</div>`;
+                document.getElementById('siparis-listesi').innerHTML = '';
+                document.getElementById('plan-ozeti').innerHTML = '';
+            } finally {
+                // --- İyileştirme 1: Butonu Serbest Bırakma ---
+                refreshButton.disabled = false;
+                refreshButton.textContent = success ? '✅ Veriler Güncellendi' : '🔄 Verileri Yenile (Hata)';
+                setTimeout(() => { 
+                    if (refreshButton.textContent.includes('Güncellendi')) {
+                        refreshButton.textContent = '🔄 Verileri Yenile';
+                    }
+                }, 3000); // Başarılı mesajını 3 saniye sonra kaldır.
             }
-        }
-        
-        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
-            let html = `<h2 style="color: #00a359;">🚀 Üretim Planlama (Kapasite: ${kapasite} m²/gün)</h2>`;
+        }
 
-            if (toplam_eksi_m2 > 0) {
-                html += `<p style="font-weight: bold; color: darkred; font-size: 0.9em;">Toplam Sıva M² Eksiği: ${toplam_eksi_m2} m²</p>`;
-            } else {
-                 html += `<p style="font-weight: bold; color: green; font-size: 0.9em;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.</p>`;
-            }
-            
-            html += `
-            <div style="display: flex; gap: 10px;">
-                <div class="plan-box" style="flex: 1; background-color: #d8f5ff; border: 1px solid #17a2b8;">
-                    <h3>Sıva Üretim Planı (5 Gün)</h3>
-                    <table>`;
-                    const sivaKeys = Object.keys(sivaPlan);
-                    if (sivaKeys.length > 0) {
-                        sivaKeys.forEach(gun => {
-                            html += `<tr><td>Gün ${gun}</td><td>${sivaPlan[gun]} m²</td></tr>`;
-                        });
-                    } else {
-                        html += `<tr><td colspan="2">İhtiyaç yok.</td></tr>`;
-                    }
-                    html += `</table>
-                </div>
+        // Yeni Planlama Render Fonksiyonu
+        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
+            let html = `<h2 style="color: #00a359;">🚀 Üretim Planlama (Kapasite: ${formatM2(kapasite)} m²/gün)</h2>`;
 
-                <div class="plan-box" style="flex: 1; background-color: #fff0d8; border: 1px solid #cc8400;">
-                    <h3>Sevkiyat Planı (5 Gün)</h3>`;
-                    const sevkiyatKeys = Object.keys(sevkiyatPlan);
-                    if (sevkiyatKeys.length > 0) {
-                        sevkiyatKeys.forEach(tarih => {
-                            const sevkiyatlar = sevkiyatPlan[tarih];
-                            const toplamM2 = sevkiyatlar.reduce((sum, s) => sum + s.bekleyen_m2, 0);
+            if (toplam_eksi_m2 > 0) {
+                html += `<p style="font-weight: bold; color: darkred; font-size: 0.9em;">Toplam Sıva M² Eksiği: ${formatM2(toplam_eksi_m2)} m²</p>`;
+            } else {
+                 html += `<p style="font-weight: bold; color: green; font-size: 0.9em;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.</p>`;
+            }
+            
+            html += `
+            <div style="display: flex; gap: 10px;">
+                <div class="plan-box" style="flex: 1; background-color: #d8f5ff; border: 1px solid #17a2b8;">
+                    <h3>Sıva Üretim Planı (5 Gün)</h3>
+                    <table>`;
+                    const sivaKeys = Object.keys(sivaPlan);
+                    if (sivaKeys.length > 0) {
+                        sivaKeys.forEach(gun => {
+                            html += `<tr><td>Gün ${gun}</td><td>${formatM2(sivaPlan[gun])} m²</td></tr>`;
+                        });
+                    } else {
+                        html += `<tr><td colspan="2">İhtiyaç yok.</td></tr>`;
+                    }
+                    html += `</table>
+                </div>
 
-                            html += `
-                                <h4 style="margin: 5px 0 2px 0; color: #0056b3; font-size: 0.9em;">${tarih} (${toplamM2} m²)</h4>
-                                <ul style="list-style: none; padding: 0; margin-left: 5px; font-size: 0.8em;">`;
-                                    sevkiyatlar.forEach(s => {
-                                        html += `<li>- ${s.urun_kodu}: ${s.bekleyen_m2} m² (${s.musteri})</li>`;
-                                    });
-                            html += `</ul>`;
-                        });
-                    } else {
-                        html += `<p style="font-size: 0.9em;">Önümüzdeki 5 gün terminli sevkiyat yok.</p>`;
-                    }
+                <div class="plan-box" style="flex: 1; background-color: #fff0d8; border: 1px solid #cc8400;">
+                    <h3>Sevkiyat Planı (5 Gün)</h3>`;
+                    const sevkiyatKeys = Object.keys(sevkiyatPlan);
+                    if (sevkiyatKeys.length > 0) {
+                        sevkiyatKeys.forEach(tarih => {
+                            const sevkiyatlar = sevkiyatPlan[tarih];
+                            const toplamM2 = sevkiyatlar.reduce((sum, s) => sum + s.bekleyen_m2, 0);
 
-                    html += `
-                </div>
-            </div>`;
+                            html += `
+                                <h4 style="margin: 5px 0 2px 0; color: #0056b3; font-size: 0.9em;">${tarih} (${formatM2(toplamM2)} m²)</h4>
+                                <ul style="list-style: none; padding: 0; margin-left: 5px; font-size: 0.8em;">`;
+                                    sevkiyatlar.forEach(s => {
+                                        html += `<li>- ${s.urun_kodu}: ${formatM2(s.bekleyen_m2)} m² (${s.musteri})</li>`;
+                                    });
+                            html += `</ul>`;
+                        });
+                    } else {
+                        html += `<p style="font-size: 0.9em;">Önümüzdeki 5 gün terminli sevkiyat yok.</p>`;
+                    }
 
-            document.getElementById('plan-ozeti').innerHTML = html;
-        }
+                    html += `
+                </div>
+            </div>`;
+
+            document.getElementById('plan-ozeti').innerHTML = html;
+        }
 
 
-        function renderStok(stokData, deficitAnalysis) {
-            // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
-            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sıvalı M²</th><th>Eksik Ham M²</th></tr>';
-            
-            // Sıralanmış anahtarlar
-            const sortedKeys = Object.keys(stokData).sort((a, b) => {
-                const [cinsiA, kalinlikA, asamaA] = a.split(/ \((.*)\)/);
-                const [cinsiB, kalinlikB, asamaB] = b.split(/ \((.*)\)/);
-                
-                if (cinsiA !== cinsiB) return cinsiA.localeCompare(cinsiB);
-                if (kalinlikA !== kalinlikB) return kalinlikA.localeCompare(kalinlikB);
-                
-                const orderMap = {'Ham': 0, 'Sivali': 1};
-                return orderMap[asamaA.trim()] - orderMap[asamaB.trim()];
-            });
-            
-            sortedKeys.forEach(key => {
-                const value = stokData[key];
-                
-                const itemKey = key.substring(0, key.lastIndexOf(' (')); 
-                const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
-                const deficitInfo = deficitAnalysis[itemKey]; 
-                
-                let sivaliDeficitText = '-';
-                let hamDeficitText = '-';
-                let sivaliDeficit = 0;
-                let hamDeficit = 0;
-                let hamCoverage = 0;
+        function renderStok(stokData, deficitAnalysis) {
+            // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
+            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sıvalı M²</th><th>Eksik Ham M²</th></tr>';
+            
+            // Sıralanmış anahtarlar
+            const sortedKeys = Object.keys(stokData).sort((a, b) => {
+                const [cinsiA, kalinlikA, asamaA] = a.split(/ \((.*)\)/);
+                const [cinsiB, kalinlikB, asamaB] = b.split(/ \((.*)\)/);
+                
+                if (cinsiA !== cinsiB) return cinsiA.localeCompare(cinsiB);
+                if (kalinlikA !== kalinlikB) return kalinlikA.localeCompare(kalinlikB);
+                
+                const orderMap = {'Ham': 0, 'Sivali': 1};
+                return orderMap[asamaA.trim()] - orderMap[asamaB.trim()];
+            });
+            
+            sortedKeys.forEach(key => {
+                const value = stokData[key];
+                
+                const itemKey = key.substring(0, key.lastIndexOf(' (')); 
+                const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
+                const deficitInfo = deficitAnalysis[itemKey]; 
+                
+                let sivaliDeficitText = '-';
+                let hamDeficitText = '-';
+                let sivaliDeficit = 0;
+                let hamDeficit = 0;
+                let hamCoverage = 0;
 
-                // Defisit Değerlerini Hesapla/Al
-                if (deficitInfo) {
-                    sivaliDeficit = deficitInfo.sivali_deficit || 0;
-                    hamDeficit = deficitInfo.ham_deficit || 0;
-                    hamCoverage = deficitInfo.ham_coverage || 0;
-                }
-                
-                // SIVALI Satırı
-                if (asama === 'Sivali') {
-                    if (sivaliDeficit > 0) {
-                        sivaliDeficitText = `<span class="deficit-red">${sivaliDeficit} m² EKSİK</span>`;
-                    }
-                } 
-                
-                // HAM Satırı
-                if (asama === 'Ham') {
-                    if (hamDeficit > 0) {
-                        hamDeficitText = `<span class="deficit-red">${hamDeficit} m² EKSİK</span>`;
-                    } 
-                    if (hamCoverage > 0) {
-                         sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${hamCoverage} m²)</span>`;
-                    }
-                }
+                // Defisit Değerlerini Hesapla/Al
+                if (deficitInfo) {
+                    sivaliDeficit = deficitInfo.sivali_deficit || 0;
+                    hamDeficit = deficitInfo.ham_deficit || 0;
+                    hamCoverage = deficitInfo.ham_coverage || 0;
+                }
+                
+                // SIVALI Satırı
+                if (asama === 'Sivali') {
+                    if (sivaliDeficit > 0) {
+                        sivaliDeficitText = `<span class="deficit-red">${formatM2(sivaliDeficit)} m² EKSİK</span>`;
+                    }
+                } 
+                
+                // HAM Satırı
+                if (asama === 'Ham') {
+                    if (hamDeficit > 0) {
+                        hamDeficitText = `<span class="deficit-red">${formatM2(hamDeficit)} m² EKSİK</span>`;
+                    } 
+                    if (hamCoverage > 0) {
+                         sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${formatM2(hamCoverage)} m²)</span>`;
+                    }
+                }
 
-                // Sıfır Stokları Gizleme Mantığı (Sadece Pozitif/Negatif stok veya eksik sipariş varsa göster)
-                if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
-                    html += `<tr>
-                        <td>${key}</td>
-                        <td class="count-cell">${value} m²</td>
-                        <td>${sivaliDeficitText}</td>
-                        <td>${hamDeficitText}</td>
-                    </tr>`;
-                }
-            });
+                // Sıfır Stokları Gizleme Mantığı (Sadece Pozitif/Negatif stok veya eksik sipariş varsa göster)
+                if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
+                    html += `<tr>
+                        <td>${key}</td>
+                        <td class="count-cell">${formatM2(value)} m²</td>
+                        <td>${sivaliDeficitText}</td>
+                        <td>${hamDeficitText}</td>
+                    </tr>`;
+                }
+            });
 
-            html += '</table>';
-            document.getElementById('stok-tablosu').innerHTML = html;
-        }
+            html += '</table>';
+            document.getElementById('stok-tablosu').innerHTML = html;
+        }
 
-        // planlanan_is_gunu API'den siparisler objesi içinde geliyor.
-        function renderSiparisler(siparisler) {
-            const tumSiparisler = siparisler; 
-            
-            // YENİ BAŞLIKLAR: Sip. Tarihi, Müşteri, Ürün, M², Durum, Termin, Sıvalı Zemin (Gün)
-            let html = '<table><tr><th>Sip. Tarihi</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th><th>Termin</th><th>Sıvalı Zemin (Gün)</th></tr>';
+        // planlanan_is_gunu API'den siparisler objesi içinde geliyor.
+        function renderSiparisler(siparisler) {
+            const tumSiparisler = siparisler; 
+            
+            // YENİ BAŞLIKLAR: Sip. Tarihi, Müşteri, Ürün, M², Durum, Termin, Sıvalı Zemin (Gün)
+            let html = '<table><tr><th>Sip. Tarihi</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th><th>Termin</th><th>Sıvalı Zemin (Gün)</th></tr>';
 
-            if (tumSiparisler.length === 0) {
-                html += '<tr><td colspan="7" style="text-align:center; color:#666; font-weight:bold;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
-            } else {
-                tumSiparisler.forEach(s => {
-                    let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
-                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${s.bekleyen_m2} m²` : '0 m²';
-                    
-                    let planlananGunText = '-';
-                    if (s.durum === 'Bekliyor') {
-                        if (s.planlanan_is_gunu === 0) {
-                            planlananGunText = `<span style="color: green;">Stoktan</span>`;
-                        } else if (s.planlanan_is_gunu > 0) {
-                            planlananGunText = `<b>${s.planlanan_is_gunu} Gün</b>`;
-                        } else {
-                            planlananGunText = `Kapasite Yok`;
-                        }
-                    }
-                    
-                    html += `<tr>
-                        <td>${s.siparis_tarihi}</td>
-                        <td>${s.musteri}</td>
-                        <td>${s.urun_kodu}</td>
-                        <td class="count-cell">${bekleyenM2}</td>
-                        <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
-                        <td>${s.termin_tarihi}</td>
-                        <td>${planlananGunText}</td>
-                    </tr>`;
-                });
-            }
-            html += '</table>';
-            document.getElementById('siparis-listesi').innerHTML = html;
-        }
-    </script>
+            if (tumSiparisler.length === 0) {
+                html += '<tr><td colspan="7" style="text-align:center; color:#666; font-weight:bold;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
+            } else {
+                tumSiparisler.forEach(s => {
+                    let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
+                    // Bekleyen M2: Tamamlandıysa 0 gösterilir, formatlanır.
+                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${formatM2(s.bekleyen_m2)} m²` : '0 m²';
+                    
+                    let planlananGunText = '-';
+                    if (s.durum === 'Bekliyor') {
+                        if (s.planlanan_is_gunu === 0) {
+                            planlananGunText = `<span style="color: green;">Stoktan</span>`;
+                        } else if (s.planlanan_is_gunu > 0) {
+                            planlananGunText = `<b>${s.planlanan_is_gunu} Gün</b>`;
+                        } else {
+                            planlananGunText = `Kapasite Yok`;
+                        }
+                    }
+                    
+                    html += `<tr>
+                        <td>${s.siparis_tarihi}</td>
+                        <td>${s.musteri}</td>
+                        <td>${s.urun_kodu}</td>
+                        <td class="count-cell">${bekleyenM2}</td>
+                        <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
+                        <td>${s.termin_tarihi}</td>
+                        <td>${planlananGunText}</td>
+                    </tr>`;
+                });
+            }
+            html += '</table>';
+            document.getElementById('siparis-listesi').innerHTML = html;
+        }
+    </script>
 </body>
 </html>
