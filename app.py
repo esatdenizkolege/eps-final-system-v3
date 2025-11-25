@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, render_template
 import sqlite3
 import json
 from datetime import datetime, timedelta
@@ -9,12 +9,15 @@ import math
 from flask_cors import CORS 
 
 # --- UYGULAMA YAPILANDIRMASI ---
+# Render'ın kullandığı PORT'u alır, yerelde 5000 kullanılır.
 PORT = int(os.environ.get('PORT', 5000)) 
 app = Flask(__name__)
-CORS(app) # Mobil erişim (CORS) için gereklidir
+# Mobil erişim (CORS) için gereklidir. Önceki hataları çözmek için bu önemlidir.
+CORS(app) 
 DATABASE = 'envanter_v5.db'
 KAPASITE_FILE = 'kapasite.json'
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+# Önbellekleme (caching) sorunlarını azaltmak için ayar.
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 
 
 # --- 0. SABİT TANIMLAMALAR ---
 KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
@@ -30,6 +33,8 @@ def load_data(filename):
             return json.load(f)
     if filename == KAPASITE_FILE:
         return {"gunluk_siva_m2": 600}
+    
+    # Varsayılan urun_kodlari.json verisini ekledik (kullanıcının orijinal kodundan alınmıştır).
     if filename == 'urun_kodlari.json':
         return {
             'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
@@ -63,6 +68,7 @@ URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for
 
 def get_db_connection():
     """Veritabanı bağlantısını açar."""
+    # check_same_thread=False ile Flask'ın varsayılan çoklu iş parçacığı (multi-threading) ortamında SQLite'ın sorunsuz çalışması sağlanır.
     conn = sqlite3.connect(DATABASE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -134,27 +140,31 @@ def calculate_planning(conn):
 
         if eksik_sivali > 0:
             toplam_gerekli_siva += eksik_sivali
+            # İş günü hesabı: Toplam eksiği günlük kapasiteye bölerek kaçıncı günde yetişeceğini bulur.
             is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
             planlama_sonuclari[siparis['id']] = is_gunu
         else:
-            planlama_sonuclari[siparis['id']] = 0 
+            planlama_sonuclari[siparis['id']] = 0 # Stoktan karşılanabilir (0 iş günü)
 
+    # Hesaplanan iş günlerini veritabanına kaydet
     for siparis_id, is_gunu in planlama_sonuclari.items():
         conn.execute("UPDATE siparisler SET planlanan_is_gunu = ? WHERE id = ?", (is_gunu, siparis_id))
     conn.commit()
     
+    # 5 Günlük Sıva Üretim Detay Planı
     siva_plan_detay = defaultdict(int) 
     kalan_siva_m2 = toplam_gerekli_siva
-    for i in range(1, 6):
+    for i in range(1, 6): # Önümüzdeki 5 gün için
         siva_yapilacak = min(kalan_siva_m2, kapasite)
         if siva_yapilacak > 0:
             siva_plan_detay[i] = siva_yapilacak
             kalan_siva_m2 -= siva_yapilacak
         else: break
             
+    # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
     bugun = datetime.now().date()
     sevkiyat_plan_detay = defaultdict(list)
-    for i in range(0, 5):
+    for i in range(0, 5): # Bugün ve sonraki 4 gün
         plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
         sevkiyatlar = conn.execute("""
             SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
@@ -172,7 +182,7 @@ def calculate_planning(conn):
 
 @app.route('/', methods=['GET'])
 def index():
-    """Ana PC arayüzünü gösterir."""
+    """Ana PC arayüzünü (veri giriş ve kapsamlı tablolar) gösterir."""
     conn = get_db_connection()
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
@@ -193,6 +203,7 @@ def index():
     today = datetime.now().strftime('%Y-%m-%d')
     conn.close()
     
+    # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
     return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP)
 
 @app.route('/islem', methods=['POST'])
@@ -286,13 +297,14 @@ def ayarla_urun_kodu():
     return redirect(url_for('index', message=message))
 
 
-# --- 4. MOBİL İÇİN API ROTASI (JSON) ---
+# --- 4. MOBİL İÇİN ROTALAR (JSON API ve HTML GÖRÜNÜMÜ) ---
 
 @app.route('/api/stok', methods=['GET'])
 def api_stok_verileri():
     """Mobil görünüm için stok, sipariş ve planlama verilerini JSON olarak döndürür."""
     conn = get_db_connection()
     
+    # Tüm analiz ve planlama verilerini hesaplar
     toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
     stok_data = {}
@@ -314,6 +326,7 @@ def api_stok_verileri():
             deficit_analysis[key] = {
                 'sivali_deficit': sivali_eksik,
                 'ham_deficit': ham_eksik,
+                # Üretim Planı kapsayabileceği ham miktarı hesaplar
                 'ham_coverage': max(0, sivali_eksik - max(0, sivali_eksik - ham_stok)) 
             }
 
@@ -334,8 +347,18 @@ def api_stok_verileri():
     })
 
 
+@app.route('/mobil', methods=['GET'])
+def mobil_gorunum():
+    """
+    Telefonlar için tasarlanmış, veri girişi içermeyen 
+    stok_goruntule.html şablonunu templates/ klasöründen sunar.
+    """
+    # templates/stok_goruntule.html dosyasını yükler
+    return render_template('stok_goruntule.html')
+
+
 # --- HTML ŞABLONU (PC Arayüzü) ---
-# Tek tırnaklar kullanılarak kopyalama hataları minimize edilmiştir.
+# Orijinal PC arayüzü şablonunuz.
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -386,10 +409,10 @@ HTML_TEMPLATE = '''
                     urunKoduSelect.appendChild(option);
                 });
             } else {
-                 const option = document.createElement('option');
-                 option.value = '';
-                 option.textContent = 'Kod bulunamadı';
-                 urunKoduSelect.appendChild(option);
+                   const option = document.createElement('option');
+                   option.value = '';
+                   option.textContent = 'Kod bulunamadı';
+                   urunKoduSelect.appendChild(option);
             }
         }
         document.addEventListener('DOMContentLoaded', filterProductCodes);
@@ -399,6 +422,9 @@ HTML_TEMPLATE = '''
     <div class="container">
         <h1>🏭 EPS Panel Üretim ve Sipariş Yönetimi</h1>
         <p style="font-style: italic;">*Tüm giriş ve çıkışlar Metrekare (m²) cinsindendir.</p>
+        <p style="font-weight: bold; color: #007bff;">
+            Mobil Görüntüleme Adresi: <a href="{{ url_for('mobil_gorunum') }}">/mobil</a>
+        </p>
         {% if message %}
             <div class="message {% if 'Hata' in message or 'Yetersiz' in message %}error{% else %}success{% endif %}">{{ message }}</div>
         {% endif %}
@@ -484,9 +510,9 @@ HTML_TEMPLATE = '''
         <hr>
         <h2 class="plan-header">🚀 Üretim Planlama Özeti (Kapasite: {{ gunluk_siva_m2 }} m²/gün)</h2>
         {% if toplam_gerekli_siva > 0 %}
-             <p style="font-weight: bold; color: darkred;">Mevcut siparişleri karşılamak için toplam Sıvalı M² eksiği: {{ toplam_gerekli_siva }} m²</p>
+               <p style="font-weight: bold; color: darkred;">Mevcut siparişleri karşılamak için toplam Sıvalı M² eksiği: {{ toplam_gerekli_siva }} m²</p>
         {% else %}
-             <p style="font-weight: bold; color: green;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor. (Toplam bekleyen sipariş {{(siparisler|selectattr('durum', '==', 'Bekliyor')|map(attribute='bekleyen_m2')|sum)}} m²)</p>
+               <p style="font-weight: bold; color: green;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor. (Toplam bekleyen sipariş {{(siparisler|selectattr('durum', '==', 'Bekliyor')|map(attribute='bekleyen_m2')|sum)}} m²)</p>
         {% endif %}
         <div class="grid">
             <div class="form-section" style="background-color: #e9fff5;">
