@@ -103,6 +103,10 @@
 <body>
     <div class="container">
         <h1>📱 Mobil Stok & Sipariş Takip</h1>
+        
+        <button onclick="fetchData()" style="margin-bottom: 15px; background-color:#28a745; color: white; padding: 10px 15px; border: none; border-radius: 5px; width: 100%;">
+            🔄 Verileri Yenile
+        </button>
 
         <h2>📦 Stok ve Üretim Eksik Analizi (M²)</h2>
         <p style="font-size: 0.8em; color: #666;">*Sıralama: Cins/Kalınlık ve Aşama (Ham/Sıvalı)</p>
@@ -137,7 +141,7 @@
                 
                 // API'den gelen veriler: "stok", "siparisler" (tüm siparişler) ve "deficit_analysis"
                 renderStok(data.stok, data.deficit_analysis); 
-                renderSiparisler(data.siparisler); // TÜM SİPARİŞLERİ GÖSTERMEK İÇİN GEREKLİ DÜZELTME
+                renderSiparisler(data.siparisler); 
                 
             } catch (error) {
                 console.error("Fetch Error:", error); 
@@ -147,10 +151,10 @@
         }
 
         function renderStok(stokData, deficitAnalysis) {
-            // BAŞLIK DÜZELTMESİ (Eksik Sipariş -> Eksik Sıvalı)
+            // Düzeltme 2: Başlık Düzeltmesi (Eksik Sipariş -> Eksik Sıvalı M²)
             let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Eksik Sıvalı M²</th><th>Eksik Ham M²</th></tr>';
             
-            // Sıralanmış anahtarlar (Ham ve Sıvalı yan yana gelecek şekilde)
+            // Sıralanmış anahtarlar
             const sortedKeys = Object.keys(stokData).sort((a, b) => {
                 const [cinsiA, kalinlikA, asamaA] = a.split(/ \((.*)\)/);
                 const [cinsiB, kalinlikB, asamaB] = b.split(/ \((.*)\)/);
@@ -158,7 +162,6 @@
                 if (cinsiA !== cinsiB) return cinsiA.localeCompare(cinsiB);
                 if (kalinlikA !== kalinlikB) return kalinlikA.localeCompare(kalinlikB);
                 
-                // Ham (0) önce, Sıvalı (1) sonra
                 const orderMap = {'Ham': 0, 'Sivali': 1};
                 return orderMap[asamaA.trim()] - orderMap[asamaB.trim()];
             });
@@ -166,40 +169,51 @@
             sortedKeys.forEach(key => {
                 const value = stokData[key];
                 
-                // key: "BAROK 2 CM (Ham)", "BAROK 2 CM (Sivali)"
                 const itemKey = key.substring(0, key.lastIndexOf(' (')); 
                 const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
                 const deficitInfo = deficitAnalysis[itemKey]; 
                 
                 let sivaliDeficitText = '-';
                 let hamDeficitText = '-';
+                let sivaliDeficit = 0;
+                let hamDeficit = 0;
+                let hamCoverage = 0;
 
-                // SIVALI Satırı (Eksik Sıvalı sipariş miktarını gösterir)
-                if (asama === 'Sivali' && deficitInfo) {
-                    if (deficitInfo.sivali_deficit > 0) {
-                        sivaliDeficitText = `<span class="deficit-red">${deficitInfo.sivali_deficit} m² EKSİK</span>`;
+                // Defisit Değerlerini Hesapla/Al
+                if (deficitInfo) {
+                    sivaliDeficit = deficitInfo.sivali_deficit || 0;
+                    hamDeficit = deficitInfo.ham_deficit || 0;
+                    hamCoverage = deficitInfo.ham_coverage || 0;
+                }
+                
+                // SIVALI Satırı
+                if (asama === 'Sivali') {
+                    if (sivaliDeficit > 0) {
+                        sivaliDeficitText = `<span class="deficit-red">${sivaliDeficit} m² EKSİK</span>`;
                     }
                 } 
                 
-                // HAM Satırı (Ham stoktan karşılanabilecek miktarı veya Ham eksikliğini gösterir)
-                if (asama === 'Ham' && deficitInfo) {
-                    // Siparişin karşılanması için gerekli ama stokta olmayan ham miktarı
-                    if (deficitInfo.ham_deficit > 0) {
-                        hamDeficitText = `<span class="deficit-red">${deficitInfo.ham_deficit} m² EKSİK</span>`;
+                // HAM Satırı
+                if (asama === 'Ham') {
+                    if (hamDeficit > 0) {
+                        hamDeficitText = `<span class="deficit-red">${hamDeficit} m² EKSİK</span>`;
                     } 
-                    // Mevcut ham stok ile karşılanabilecek sipariş miktarı (Üretim Planı)
-                    if (deficitInfo.ham_coverage > 0) {
-                         sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${deficitInfo.ham_coverage} m²)</span>`;
+                    if (hamCoverage > 0) {
+                         // Eğer ham stoku sıvalı eksiğini karşılıyorsa (yani üretim planı varsa)
+                         sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${hamCoverage} m²)</span>`;
                     }
                 }
 
-
-                html += `<tr>
-                    <td>${key}</td>
-                    <td class="count-cell">${value} m²</td>
-                    <td>${sivaliDeficitText}</td>
-                    <td>${hamDeficitText}</td>
-                </tr>`;
+                // DÜZELTME 4: Sıfır Stokları Gizleme Mantığı
+                // Stok değeri 0 değilse VEYA eksik sıvalı sipariş varsa VEYA eksik ham stoğu varsa göster.
+                if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
+                    html += `<tr>
+                        <td>${key}</td>
+                        <td class="count-cell">${value} m²</td>
+                        <td>${sivaliDeficitText}</td>
+                        <td>${hamDeficitText}</td>
+                    </tr>`;
+                }
             });
 
             html += '</table>';
@@ -207,7 +221,7 @@
         }
 
         function renderSiparisler(siparisler) {
-            // DÜZELTME 1: Tüm siparişleri gösterir (bekleyen ve tamamlanan)
+            // Düzeltme 1: Tüm siparişleri gösterir (bekleyen ve tamamlanan)
             const tumSiparisler = siparisler; 
             
             let html = '<table><tr><th>Kod</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th></tr>';
@@ -217,12 +231,13 @@
             } else {
                 tumSiparisler.forEach(s => {
                     let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
+                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${s.bekleyen_m2} m²` : '0 m² (Tamamlandı)';
                     
                     html += `<tr>
                         <td><span class="siparis-kodu">${s.siparis_kodu}</span></td>
                         <td>${s.musteri}</td>
                         <td>${s.urun_kodu}</td>
-                        <td class="count-cell">${s.bekleyen_m2} m²</td>
+                        <td class="count-cell">${bekleyenM2}</td>
                         <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
                     </tr>`;
                 });

@@ -12,7 +12,6 @@ app = Flask(__name__)
 DATABASE = 'envanter_v5.db' 
 
 # !!! KRİTİK HATA GİDERİCİ SATIR (ÖNBELLEK TEMİZLEME ZORUNLULUĞU) !!!
-# Bu, mobil tarayıcıların stok_goruntule.html dosyasını her zaman yeniden indirmesini sağlar (304 hatası çözümü).
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 
 
 # --- 0. SABİT TANIMLAMALAR ---
@@ -150,13 +149,17 @@ HTML_TEMPLATE = """
         <div class="grid">
             
             <div class="form-section">
-                <h2>1. Stok Hareketleri (Üretim/Alım/Satış)</h2>
+                <h2>1. Stok Hareketleri (Üretim/Alım/Satış/İptal)</h2>
                 <form action="/islem" method="POST">
                     <select name="action" required>
-                        <option value="ham_alim">1 - Ham Panel Alımı (m² Stoğa Ekle)</option>
+                        <option value="ham_alim">1 - Ham Panel Alımı (Stoğa Ekle)</option>
                         <option value="siva_uygula">2 - Sıva Uygulama (Ham -> Sıvalı Üretim)</option>
                         <option value="sat_ham">3 - Ham Panel Satışı</option>
                         <option value="sat_sivali">4 - Sıvalı Panel Satışı</option>
+                        <option value="iptal_ham_alim">5 - Ham Alımı İptal (Ham Stoktan Çıkar)</option>
+                        <option value="iptal_siva">6 - Sıva İşlemi Geri Al (Sıvalı -> Ham)</option>
+                        <option value="iptal_sat_ham">7 - Ham Satışını Geri Al (Ham Stoğa Ekle)</option>
+                        <option value="iptal_sat_sivali">8 - Sıvalı Satışını Geri Al (Sıvalı Stoğa Ekle)</option>
                     </select>
                     
                     <select name="cinsi" required>
@@ -268,7 +271,7 @@ HTML_TEMPLATE = """
                     <td>{{ s['urun_kodu'] }}</td>
                     <td>{{ s['cinsi'] }} {{ s['kalinlik'] }}</td>
                     <td>{{ s['siparis_tarihi'] }}</td>
-                    <td><b>{{ s['termin_tarihi'] }}</b></td>
+                    <td>{{ s['termin_tarihi'] }}</td>
                     <td>{{ s['bekleyen_m2'] }} m²</td>
                     <td>
                         {% if s['durum'] == 'Bekliyor' %}
@@ -321,7 +324,6 @@ HTML_TEMPLATE = """
             } else {
                 validCodes.forEach(code => {
                     const option = document.createElement('option');
-                    const option = document.createElement('option');
                     option.value = code;
                     option.text = code;
                     urunKoduSelect.add(option);
@@ -339,7 +341,7 @@ HTML_TEMPLATE = """
 """
 
 # --- 2. WEB ARAYÜZÜ ROUTE'LARI ---
-# ... (Bu kısım aynı kalır)
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     conn = get_db_connection()
@@ -387,6 +389,21 @@ def islem():
         elif action == 'sat_sivali':
             message = process_sale(conn, cinsi, kalinlik, 'Sivali', m2)
         
+        # --- İPTAL İŞLEMLERİ (YENİ EKLENDİ) ---
+        elif action == 'iptal_ham_alim':
+            # Ham Alımını İptal Etmek, Ham Satışı (Stoktan Çıkarma) yapmaktır.
+            message = process_sale(conn, cinsi, kalinlik, 'Ham', m2, is_undo=True) 
+        elif action == 'iptal_sat_ham':
+            # Ham Satışını Geri Almak, Ham Alımı (Stoğa Ekleme) yapmaktır.
+            message = process_ham_alim(conn, cinsi, kalinlik, m2, is_undo=True)
+        elif action == 'iptal_sat_sivali':
+            # Sıvalı Satışını Geri Almak, Sıvalı Stoğa Ekleme yapmaktır.
+            message = process_sale_undo(conn, cinsi, kalinlik, 'Sivali', m2)
+        elif action == 'iptal_siva':
+            # Sıva işlemini geri almak (Sıvalı -> Ham)
+            message = process_siva_undo(conn, cinsi, kalinlik, m2)
+
+        
         conn.commit()
         return redirect(url_for('index', message=message))
 
@@ -431,7 +448,7 @@ def siparis_islem():
         return redirect(url_for('index', message=f"Hata: {e}"))
 
 # --- 3. İŞLEM MANTIKLARI ---
-# ... (Bu kısım aynı kalır)
+
 def calculate_deficit(conn):
     """İki seviyeli (Sıvalı ve Ham) kümülatif eksikliği M2 cinsinden hesaplar."""
     bekleyen_siparis = conn.execute("""
@@ -466,11 +483,16 @@ def calculate_deficit(conn):
     return deficit_results
 
 
-def process_ham_alim(conn, cinsi, kalinlik, m2):
+def process_ham_alim(conn, cinsi, kalinlik, m2, is_undo=False):
+    """Ham panel alımı (stoğa ekleme) veya Ham satış iptali."""
     conn.execute("UPDATE stok SET m2 = m2 + ? WHERE cinsi = ? AND kalinlik = ? AND asama = 'Ham'", (m2, cinsi, kalinlik))
-    return f"✅ {cinsi} {kalinlik} Ham Panel stoğa {m2} m² eklendi."
+    if is_undo:
+        return f"✅ Ham Satışı İptal Edildi: {cinsi} {kalinlik} Ham Panel stoğa {m2} m² geri eklendi."
+    else:
+        return f"✅ {cinsi} {kalinlik} Ham Panel stoğa {m2} m² eklendi."
 
 def process_siva(conn, cinsi, kalinlik, m2):
+    """Ham -> Sıvalı üretim."""
     ham_row = conn.execute("SELECT m2 FROM stok WHERE cinsi = ? AND kalinlik = ? AND asama = 'Ham'", (cinsi, kalinlik)).fetchone()
     if not ham_row or ham_row['m2'] < m2:
         raise Exception(f"Yetersiz Ham Stok: İşlem için sadece {ham_row['m2'] if ham_row else 0} m² Ham Panel mevcut.")
@@ -479,13 +501,49 @@ def process_siva(conn, cinsi, kalinlik, m2):
     conn.execute("UPDATE stok SET m2 = m2 + ? WHERE cinsi = ? AND kalinlik = ? AND asama = 'Sivali'", (m2, cinsi, kalinlik))
     return f"✅ {m2} m² {cinsi} {kalinlik} panel SIVALI aşamasına geçti."
 
-def process_sale(conn, cinsi, kalinlik, asama, m2):
+def process_sale(conn, cinsi, kalinlik, asama, m2, is_undo=False):
+    """Stoktan çıkarma (Satış veya Ham Alım İptali)."""
     stok_row = conn.execute("SELECT m2 FROM stok WHERE cinsi = ? AND kalinlik = ? AND asama = ?", (cinsi, kalinlik, asama)).fetchone()
-    if not stok_row or stok_row['m2'] < m2:
-        raise Exception(f"Yetersiz {asama} Stok: Satış için {m2} m² gerekiyor, sadece {stok_row['m2'] if stok_row else 0} mevcut.")
-        
+    
+    if asama == 'Ham' and is_undo: # Ham alım iptali için stok kontrolü
+        message_prefix = "Ham Alımı İptali"
+        if not stok_row or stok_row['m2'] < m2:
+             raise Exception(f"Yetersiz Ham Stok: Ham Alımını {m2} m² geri almak için stokta sadece {stok_row['m2'] if stok_row else 0} mevcut.")
+    elif not is_undo: # Normal satış için stok kontrolü
+        message_prefix = f"{asama} Panel Satışı"
+        if not stok_row or stok_row['m2'] < m2:
+            raise Exception(f"Yetersiz {asama} Stok: Satış için {m2} m² gerekiyor, sadece {stok_row['m2'] if stok_row else 0} mevcut.")
+    else:
+         # is_undo=False için varsayılan mesaj
+        message_prefix = f"{asama} Panel Satışı"
+
     conn.execute("UPDATE stok SET m2 = m2 - ? WHERE cinsi = ? AND kalinlik = ? AND asama = ?", (m2, cinsi, kalinlik, asama))
+    
+    if is_undo and asama == 'Ham':
+         return f"✅ {m2} m² {cinsi} {kalinlik} Ham Alımı İPTAL edildi. Ham Stoktan Düşüldü."
+    elif is_undo:
+        # Bu fonksiyon normalde iptal için kullanılmaz, sadece Ham Alım İptali için buraya girdi.
+        pass
+        
     return f"✅ {m2} m² {cinsi} {kalinlik} {asama} Panel başarıyla SATILDI."
+
+# --- YENİ GERİ ALMA İŞLEM MANTIKLARI ---
+def process_sale_undo(conn, cinsi, kalinlik, asama, m2):
+    """Satış işlemini (stoktan çıkarma) geri alır (stoğa ekler)."""
+    conn.execute("UPDATE stok SET m2 = m2 + ? WHERE cinsi = ? AND kalinlik = ? AND asama = ?", (m2, cinsi, kalinlik, asama))
+    return f"✅ {m2} m² {cinsi} {kalinlik} {asama} Satışı İPTAL edildi. Stok Geri Yüklendi."
+
+def process_siva_undo(conn, cinsi, kalinlik, m2):
+    """Sıva uygulama (Ham -> Sıvalı) işlemini geri alır (Sıvalı -> Ham)."""
+    sivali_row = conn.execute("SELECT m2 FROM stok WHERE cinsi = ? AND kalinlik = ? AND asama = 'Sivali'", (cinsi, kalinlik)).fetchone()
+    if not sivali_row or sivali_row['m2'] < m2:
+        raise Exception(f"Geri Alma Hatası: Geri alınacak {m2} m² Sıvalı Panel mevcut değil. Sadece {sivali_row['m2'] if sivali_row else 0} mevcut.")
+        
+    conn.execute("UPDATE stok SET m2 = m2 - ? WHERE cinsi = ? AND kalinlik = ? AND asama = 'Sivali'", (m2, cinsi, kalinlik))
+    conn.execute("UPDATE stok SET m2 = m2 + ? WHERE cinsi = ? AND kalinlik = ? AND asama = 'Ham'", (m2, cinsi, kalinlik))
+    return f"✅ {m2} m² {cinsi} {kalinlik} panelden SIVA İŞLEMİ GERİ ALINDI (Sıvalı -> Ham)."
+# --- YENİ GERİ ALMA İŞLEM MANTIKLARI SONU ---
+
 
 def add_siparis(conn, siparis_kodu, urun_kodu, cinsi, kalinlik, m2, musteri, siparis_tarihi, termin_tarihi):
     conn.execute("""
@@ -519,7 +577,7 @@ def delete_siparis(conn, siparis_id):
     return f"❌ Sipariş ID: {siparis_id} başarıyla SİLİNDİ."
     
 # --- 4. MOBİL İÇİN API UÇ NOKTASI (Nihai Veri Çıktısı) ---
-# ... (Bu kısım aynı kalır)
+
 @app.route('/api/stok')
 def api_stok():
     conn = get_db_connection()
