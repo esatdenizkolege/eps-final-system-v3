@@ -34,7 +34,7 @@ def load_data(filename):
     if filename == KAPASITE_FILE:
         return {"gunluk_siva_m2": 600}
     
-    # Varsayılan urun_kodlari.json verisini ekledik (kullanıcının orijinal kodundan alınmıştır).
+    # Varsayılan urun_kodlari.json verisi (BUZ TAŞ kodları BT ile düzeltildi)
     if filename == 'urun_kodlari.json':
         return {
             'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
@@ -44,8 +44,10 @@ def load_data(filename):
             'KAYRAK TAŞ 2 CM': ['KY001', 'KY002', 'KY003', 'KY004', 'KY005', 'KY006', 'KY007', 'KY008', 'KY009', 'KY010', 'KY011', 'KY012', 'KY013', 'KY014'],
             'DÜZ TUĞLA 2 CM': ['DT101', 'DT102', 'DT103', 'DT104', 'DT105', 'DT106', 'DT107', 'DT108', 'DT109', 'DT110', 'DT111', 'DT112', 'DT113', 'DT114', 'DT115', 'DT116', 'DT117', 'DT118', 'DT119', 'DT120'],
             'DÜZ TUĞLA 3.6 CM': ['DT301', 'DT302', 'DT303', 'DT304', 'DT305', 'DT306', 'DT307', 'DT308', 'DT309', 'DT310', 'DT311', 'DT312', 'DT313', 'DT314', 'DT315', 'DT316', 'DT317', 'DT318', 'DT319', 'DT320'],
-            'BUZ TAŞ 2 CM': ['BZ001', 'BZ002', 'BZ003', 'BZ004', 'BZ005', 'BZ006', 'BZ007', 'BZ008', 'BZ009', 'BZ010'],
-            'BUZ TAŞ 3.6 CM': ['BZ101', 'BZ102', 'BZ103', 'BZ104', 'BZ105', 'BZ106', 'BZ107', 'BZ108', 'BZ109', 'BZ110'],
+            # >>> BUZ TAŞ Kodları BT olarak düzeltildi.
+            'BUZ TAŞ 2 CM': [f'BT{i:03}' for i in range(1, 11)],     # BT001, BT002... BT010
+            'BUZ TAŞ 3.6 CM': [f'BT{i:03}' for i in range(101, 111)], # BT101, BT102... BT110
+            # <<< DÜZELTME SONU
             'MERMER 3 CM': [f"M{i:03}" for i in range(1, 10)],
             'LA 3 CM': [f"L{i:03}" for i in range(1, 10)],
             'LB ZEMİN 3 CM': [f"LB{i:03}" for i in range(1, 10)],
@@ -110,7 +112,9 @@ def get_next_siparis_kodu(conn):
     return f"S-{current_year}-{new_number:04}"
 
 def calculate_planning(conn):
-    """Sıva planı ve sevkiyat planı için 5 günlük detayları hesaplar (Termin Tarihi Öncelikli)."""
+    """
+    Sıva planı, sevkiyat planı ve ürün bazlı sıva ihtiyacı detaylarını hesaplar.
+    """
     kapasite = load_data(KAPASITE_FILE)['gunluk_siva_m2']
     stok_map = {}
     stok_raw = conn.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok").fetchall()
@@ -127,6 +131,7 @@ def calculate_planning(conn):
         ORDER BY termin_tarihi ASC, siparis_tarihi ASC 
     """).fetchall()
 
+    siva_uretim_ihtiyaci = [] # Ürün bazlı sıva ihtiyacını tutar
     toplam_gerekli_siva = 0 
     planlama_sonuclari = {} 
     temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
@@ -140,27 +145,52 @@ def calculate_planning(conn):
 
         if eksik_sivali > 0:
             toplam_gerekli_siva += eksik_sivali
-            # İş günü hesabı: Toplam eksiği günlük kapasiteye bölerek kaçıncı günde yetişeceğini bulur.
-            is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
-            planlama_sonuclari[siparis['id']] = is_gunu
-        else:
-            planlama_sonuclari[siparis['id']] = 0 # Stoktan karşılanabilir (0 iş günü)
+            # Üretim ihtiyacını listeye ekle
+            siva_uretim_ihtiyaci.append({
+                'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                'm2': eksik_sivali
+            })
+            
+        # Siparişin ne zaman tamamlanabileceği (iş günü)
+        is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
+        planlama_sonuclari[siparis['id']] = is_gunu if eksik_sivali > 0 else 0
 
     # Hesaplanan iş günlerini veritabanına kaydet
     for siparis_id, is_gunu in planlama_sonuclari.items():
         conn.execute("UPDATE siparisler SET planlanan_is_gunu = ? WHERE id = ?", (is_gunu, siparis_id))
     conn.commit()
     
-    # 5 Günlük Sıva Üretim Detay Planı
-    siva_plan_detay = defaultdict(int) 
-    kalan_siva_m2 = toplam_gerekli_siva
-    for i in range(1, 6): # Önümüzdeki 5 gün için
-        siva_yapilacak = min(kalan_siva_m2, kapasite)
-        if siva_yapilacak > 0:
-            siva_plan_detay[i] = siva_yapilacak
-            kalan_siva_m2 -= siva_yapilacak
-        else: break
+    # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
+    siva_plan_detay = defaultdict(list) 
+    kalan_kapasite_bugun = 0
+    ihtiyac_index = 0
+    
+    for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
+        kalan_kapasite_bugun = kapasite
+        
+        while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_ihtiyaci):
+            ihtiyac = siva_uretim_ihtiyaci[ihtiyac_index]
+            key = ihtiyac['key']
+            m2_gerekli = ihtiyac['m2']
             
+            # Bu ürüne ne kadar sıva yapılabilir? (Ya ihtiyacın tamamı ya da kalan kapasite kadar)
+            m2_yapilacak = min(m2_gerekli, kalan_kapasite_bugun)
+            
+            siva_plan_detay[gun].append({
+                'cinsi': key,
+                'm2': m2_yapilacak
+            })
+            
+            ihtiyac['m2'] -= m2_yapilacak
+            kalan_kapasite_bugun -= m2_yapilacak
+            
+            # Eğer ihtiyacın tamamı karşılandıysa, bir sonraki ürüne geç
+            if ihtiyac['m2'] <= 0:
+                ihtiyac_index += 1
+            
+        if ihtiyac_index >= len(siva_uretim_ihtiyaci):
+            break # Tüm ihtiyaçlar karşılandı, döngüden çık.
+    
     # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
     bugun = datetime.now().date()
     sevkiyat_plan_detay = defaultdict(list)
@@ -336,6 +366,7 @@ def api_stok_verileri():
     conn.close()
 
     # Mobil arayüzün beklediği tüm veriyi döndür
+    # siva_plan_detay artık Gun: [{'cinsi': 'Barok 2 CM', 'm2': 600}, ...] formatında.
     return jsonify({
         'stok': stok_data,
         'deficit_analysis': deficit_analysis,
