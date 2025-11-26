@@ -252,13 +252,12 @@ def calculate_planning(conn):
         
         for siparis in bekleyen_siparisler:
             
-            # *** KEY ERROR DÜZELTMESİ BAŞLANGIÇ ***
+            # *** KEY ERROR DÜZELTMESİ: Sipariş anahtarı formatlaması ***
             # Sipariş verisinden gelen Cinsi ve Kalınlığı zorunlu olarak temizleyip formatla
-            # (Bu, veritabanında hatalı kayıt olsa bile, anlık analizi kurtarır.)
+            # Bu, hatalı kayıt olsa bile, anlık analizi kurtarır.
             temiz_cinsi = siparis['cinsi'].strip().upper()
             temiz_kalinlik = siparis['kalinlik'].strip().upper()
             key = (temiz_cinsi, temiz_kalinlik)
-            # *** KEY ERROR DÜZELTMESİ BİTİŞ ***
             
             stok_sivali_available = temp_stok_sivali.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
@@ -268,7 +267,9 @@ def calculate_planning(conn):
             kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
             
             # Sıvalı stoğu azalt
-            temp_stok_sivali[key] = stok_sivali_available - karsilanan_sivali
+            if key in temp_stok_sivali:
+                 temp_stok_sivali[key] -= karsilanan_sivali
+            # Not: Eğer key stok_map'te yoksa, sipariş, henüz stok tablosunda olmayan yeni bir ürün demektir. Bu durumda geçici stok sıfır kalır ve hata vermez.
 
             # 2. Üretim İhtiyacını Hesapla (Ham Stoku Dikkate Almadan, sadece Sıva)
             # Bu, sıvalı stoğu tükettikten sonra kalan ihtiyacın tamamıdır.
@@ -323,7 +324,8 @@ def calculate_planning(conn):
             karsilanan_sivali = min(gerekli_m2, stok_sivali_available)
             kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
             
-            temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
+            if key in temp_sivali_stok_kopyasi:
+                 temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
             
             if kalan_ihtiyac > 0:
                 siva_uretim_sirasli_ihtiyac.append({
