@@ -3,7 +3,9 @@ import os
 from flask import Flask, render_template_string, request, redirect, url_for, jsonify, render_template
 # SQLite yerine PostgreSQL'e bağlanmak için psycopg2 kütüphanesini kullanıyoruz.
 import psycopg2 
-from psycopg2.extras import RealDictCursor # Sorgu sonuçlarını sözlük (dict) olarak almak için
+# Sorgu sonuçlarını sözlük (dict) olarak almak için
+# Hata almamak için RealDictCursor'ı bağlantı sırasında kullanacağız.
+from psycopg2.extras import RealDictCursor 
 import json
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -35,38 +37,38 @@ VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
 # --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ (JSON dosyaları hala yerel diskte tutuluyor) ---
 
 def load_data(filename):
-    """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    if filename == KAPASITE_FILE:
-        return {"gunluk_siva_m2": 600}
-    
-    if filename == 'urun_kodlari.json':
-        # Varsayılan urun_kodlari.json verisi
-        return {
-            'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
-            'PARKE TAŞ 2 CM': [f'PT{i:03}' for i in range(1, 31)],
-            'KIRIK TAŞ 2 CM': [f'KR{i:03}' for i in range(1, 13)],
-            'YATAY TAŞ 2 CM': ['YT011', 'YT012', 'YT013', 'YT014', 'YT015', 'YT016'],
-            'KAYRAK TAŞ 2 CM': [f'KY{i:03}' for i in range(1, 15)],
-            'DÜZ TUĞLA 2 CM': [f'DT1{i:02}' for i in range(1, 21)],
-            'DÜZ TUĞLA 3.6 CM': [f'DT3{i:02}' for i in range(1, 21)],
-            'BUZ TAŞ 2 CM': [f'BT{i:03}' for i in range(1, 11)],
-            'BUZ TAŞ 3.6 CM': [f'BT{i:03}' for i in range(101, 111)],
-            'MERMER 3 CM': [f"M{i:03}" for i in range(1, 10)],
-            'LA 3 CM': [f"L{i:03}" for i in range(1, 10)],
-            'LB ZEMİN 3 CM': [f"LB{i:03}" for i in range(1, 10)],
-            'BAROK 3.6 CM': ['B401', 'B402', 'B403'],
-            'YATAY TAŞ 3.6 CM': ['YT401', 'YT402', 'YT403'],
-            'KAYRAK TAŞ 3.6 CM': ['KY401', 'KY402', 'KY403'],
-        }
-    return {}
+    """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
+    if os.path.exists(filename):
+        with open(filename, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    if filename == KAPASITE_FILE:
+        return {"gunluk_siva_m2": 600}
+    
+    if filename == 'urun_kodlari.json':
+        # Varsayılan urun_kodlari.json verisi
+        return {
+            'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B034', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
+            'PARKE TAŞ 2 CM': [f'PT{i:03}' for i in range(1, 31)],
+            'KIRIK TAŞ 2 CM': [f'KR{i:03}' for i in range(1, 13)],
+            'YATAY TAŞ 2 CM': ['YT011', 'YT012', 'YT013', 'YT014', 'YT015', 'YT016'],
+            'KAYRAK TAŞ 2 CM': [f'KY{i:03}' for i in range(1, 15)],
+            'DÜZ TUĞLA 2 CM': [f'DT1{i:02}' for i in range(1, 21)],
+            'DÜZ TUĞLA 3.6 CM': [f'DT3{i:02}' for i in range(1, 21)],
+            'BUZ TAŞ 2 CM': [f'BT{i:03}' for i in range(1, 11)],
+            'BUZ TAŞ 3.6 CM': [f'BT{i:03}' for i in range(101, 111)],
+            'MERMER 3 CM': [f"M{i:03}" for i in range(1, 10)],
+            'LA 3 CM': [f"L{i:03}" for i in range(1, 10)],
+            'LB ZEMİN 3 CM': [f"LB{i:03}" for i in range(1, 10)],
+            'BAROK 3.6 CM': ['B401', 'B402', 'B403'],
+            'YATAY TAŞ 3.6 CM': ['YT401', 'YT402', 'YT403'],
+            'KAYRAK TAŞ 3.6 CM': ['KY401', 'KY402', 'KY403'],
+        }
+    return {}
 
 def save_data(data, filename):
-    """JSON verisini kaydeder."""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+    """JSON verisini kaydeder."""
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4)
 
 CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
 URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
@@ -75,480 +77,489 @@ URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for
 # --- 1. VERİTABANI İŞLEMLERİ VE BAŞLANGIÇ (POSTGRESQL) ---
 
 def get_db_connection():
-    """PostgreSQL veritabanı bağlantısını açar."""
-    # DATABASE_URL ortam değişkeni olmadan Render'da çalışmayacaktır.
-    if not DATABASE_URL:
-        # Uygulama, Render'da DATABASE_URL olmadan başlamamalıdır.
-        # Yerel deneme için yerel bir PostgreSQL bağlantısı kullanılabilir.
-        raise Exception("DATABASE_URL ortam değişkeni Render'da tanımlı değil. Bağlantı kurulamıyor.")
-    
-    conn = psycopg2.connect(DATABASE_URL)
-    # Varsayılan olarak tüm sorgular dict (sözlük) döndürsün
-    conn.row_factory = RealDictCursor
-    return conn
+    """PostgreSQL veritabanı bağlantısını açar."""
+    # DATABASE_URL ortam değişkeni olmadan Render'da çalışmayacaktır.
+    if not DATABASE_URL:
+        # Uygulama, Render'da DATABASE_URL olmadan başlamamalıdır.
+        # Yerel deneme için yerel bir PostgreSQL bağlantısı kullanılabilir.
+        raise Exception("DATABASE_URL ortam değişkeni Render'da tanımlı değil. Bağlantı kurulamıyor.")
+    
+    # DÜZELTME: psycopg2'de row_factory yerine cursor_factory kullanılır.
+    # RealDictCursor, bağlantıdan oluşturulan tüm imleçlerin sözlük (dict) döndürmesini sağlar.
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    
+    # Hata veren eski satır:
+    # conn.row_factory = RealDictCursor 
+    
+    return conn
 
 def init_db():
-    """Veritabanını ve tabloları oluşturur."""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # PostgreSQL tablosu oluşturma (SQLite'tan farklı syntax)
-        # SERIAL PRIMARY KEY: Otomatik artan ID
-        # UNIQUE(cinsi, kalinlik, asama): Stok tablosundaki benzersizliği sağlar
-        cur.execute(""" 
-            CREATE TABLE IF NOT EXISTS stok ( 
-                id SERIAL PRIMARY KEY, 
-                cinsi TEXT NOT NULL, 
-                kalinlik TEXT NOT NULL, 
-                asama TEXT NOT NULL, 
-                m2 INTEGER, 
-                UNIQUE(cinsi, kalinlik, asama) 
-            ); 
-        """)
-        cur.execute(""" 
-            CREATE TABLE IF NOT EXISTS siparisler ( 
-                id SERIAL PRIMARY KEY, 
-                siparis_kodu TEXT NOT NULL UNIQUE, 
-                urun_kodu TEXT NOT NULL, 
-                cinsi TEXT NOT NULL, 
-                kalinlik TEXT NOT NULL, 
-                musteri TEXT NOT NULL, 
-                siparis_tarihi DATE NOT NULL, 
-                termin_tarihi DATE, 
-                bekleyen_m2 INTEGER, 
-                durum TEXT NOT NULL, 
-                planlanan_is_gunu INTEGER 
-            ); 
-        """)
+    """Veritabanını ve tabloları oluşturur."""
+    try:
+        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # PostgreSQL tablosu oluşturma (SQLite'tan farklı syntax)
+        # SERIAL PRIMARY KEY: Otomatik artan ID
+        # UNIQUE(cinsi, kalinlik, asama): Stok tablosundaki benzersizliği sağlar
+        cur.execute(""" 
+            CREATE TABLE IF NOT EXISTS stok ( 
+                id SERIAL PRIMARY KEY, 
+                cinsi TEXT NOT NULL, 
+                kalinlik TEXT NOT NULL, 
+                asama TEXT NOT NULL, 
+                m2 INTEGER, 
+                UNIQUE(cinsi, kalinlik, asama) 
+            ); 
+        """)
+        cur.execute(""" 
+            CREATE TABLE IF NOT EXISTS siparisler ( 
+                id SERIAL PRIMARY KEY, 
+                siparis_kodu TEXT NOT NULL UNIQUE, 
+                urun_kodu TEXT NOT NULL, 
+                cinsi TEXT NOT NULL, 
+                kalinlik TEXT NOT NULL, 
+                musteri TEXT NOT NULL, 
+                siparis_tarihi DATE NOT NULL,  
+                termin_tarihi DATE, 
+                bekleyen_m2 INTEGER, 
+                durum TEXT NOT NULL, 
+                planlanan_is_gunu INTEGER 
+            ); 
+        """)
 
-        # Varsayılan stok girişleri (EĞER YOKSA ekle)
-        for c, k in VARYANTLAR:
-            for asama in ['Ham', 'Sivali']:
-                # INSERT INTO ... ON CONFLICT DO NOTHING ile INSERT OR IGNORE mantığı sağlanır.
-                cur.execute("""
-                    INSERT INTO stok (cinsi, kalinlik, asama, m2) 
-                    VALUES (%s, %s, %s, %s) 
-                    ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
-                """, (c, k, asama, 0))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        # Hata durumunda konsola yaz
-        print(f"Veritabanı Başlatma Hatası: {e}")
-        # Bu hata genellikle DATABASE_URL'nin yanlış olduğu anlamına gelir.
-        # Uygulamanın başlatılmasını engellemek için exit(1) eklenebilir.
+        # Varsayılan stok girişleri (EĞER YOKSA ekle)
+        for c, k in VARYANTLAR:
+            for asama in ['Ham', 'Sivali']:
+                # INSERT INTO ... ON CONFLICT DO NOTHING ile INSERT OR IGNORE mantığı sağlanır.
+                cur.execute("""
+                    INSERT INTO stok (cinsi, kalinlik, asama, m2) 
+                    VALUES (%s, %s, %s, %s) 
+                    ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
+                """, (c, k, asama, 0))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        # Hata durumunda konsola yaz
+        print(f"Veritabanı Başlatma Hatası: {e}")
+        # Bu hata genellikle DATABASE_URL'nin yanlış olduğu anlamına gelir.
+        # Uygulamanın başlatılmasını engellemek için exit(1) eklenebilir.
 
 with app.app_context():
-    # PostgreSQL tablosu başlatma
-    init_db()
-    
-    # JSON dosyalarını başlatma (JSON'lar hala geçici diskte tutulacaktır)
-    if not os.path.exists(KAPASITE_FILE):
-        save_data({"gunluk_siva_m2": 600}, KAPASITE_FILE)
-    if not os.path.exists('urun_kodlari.json'):
-        save_data(CINS_TO_BOYALI_MAP, 'urun_kodlari.json')
+    # PostgreSQL tablosu başlatma
+    init_db()
+    
+    # JSON dosyalarını başlatma (JSON'lar hala geçici diskte tutulacaktır)
+    if not os.path.exists(KAPASITE_FILE):
+        save_data({"gunluk_siva_m2": 600}, KAPASITE_FILE)
+    if not os.path.exists('urun_kodlari.json'):
+        save_data(CINS_TO_BOYALI_MAP, 'urun_kodlari.json')
 
 
 # --- 2. YARDIMCI FONKSİYONLAR VE PLANLAMA MANTIĞI ---
 
 def get_next_siparis_kodu(conn):
-    """Bir sonraki sipariş kodunu oluşturur."""
-    cur = conn.cursor()
-    current_year = datetime.now().strftime('%Y')
-    
-    # PostgreSQL'de sipariş kodunu çekme
-    cur.execute(f""" 
-        SELECT siparis_kodu 
-        FROM siparisler 
-        WHERE siparis_kodu LIKE 'S-{current_year}-%' 
-        ORDER BY siparis_kodu DESC 
-        LIMIT 1 
-    """)
-    last_code_row = cur.fetchone()
-    
-    if last_code_row:
-        # RealDictCursor kullanıldığı için sözlükten çekilir
-        last_code = last_code_row['siparis_kodu'] 
-        try:
-            last_number = int(last_code.split('-')[-1])
-            new_number = last_number + 1
-        except ValueError:
-            new_number = 1 
-    else:
-        new_number = 1
-    cur.close()
-    return f"S-{current_year}-{new_number:04}"
+    """Bir sonraki sipariş kodunu oluşturur."""
+    cur = conn.cursor()
+    current_year = datetime.now().strftime('%Y')
+    
+    # PostgreSQL'de sipariş kodunu çekme
+    cur.execute(f""" 
+        SELECT siparis_kodu 
+        FROM siparisler 
+        WHERE siparis_kodu LIKE 'S-{current_year}-%' 
+        ORDER BY siparis_kodu DESC 
+        LIMIT 1 
+    """)
+    last_code_row = cur.fetchone()
+    
+    if last_code_row:
+        # RealDictCursor kullanıldığı için sözlükten çekilir
+        last_code = last_code_row['siparis_kodu'] 
+        try:
+            last_number = int(last_code.split('-')[-1])
+            new_number = last_number + 1
+        except ValueError:
+            new_number = 1 
+    else:
+        new_number = 1
+    cur.close()
+    return f"S-{current_year}-{new_number:04}"
 
 def calculate_planning(conn):
-    """
-    Sıva planı, sevkiyat planı ve ürün bazlı sıva ihtiyacı detaylarını hesaplar.
-    """
-    cur = conn.cursor()
-    kapasite = load_data(KAPASITE_FILE)['gunluk_siva_m2']
-    stok_map = {}
-    
-    cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
-    stok_raw = cur.fetchall()
-    
-    for row in stok_raw:
-        key = (row['cinsi'], row['kalinlik'])
-        if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
-        stok_map[key][row['asama']] = row['m2']
+    """
+    Sıva planı, sevkiyat planı ve ürün bazlı sıva ihtiyacı detaylarını hesaplar.
+    """
+    cur = conn.cursor()
+    kapasite = load_data(KAPASITE_FILE)['gunluk_siva_m2']
+    stok_map = {}
+    
+    cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
+    stok_raw = cur.fetchall()
+    
+    for row in stok_raw:
+        key = (row['cinsi'], row['kalinlik'])
+        if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
+        stok_map[key][row['asama']] = row['m2']
 
-    # KRİTİK KISIM: Termin tarihine göre sıralama
-    cur.execute("""
-        SELECT id, cinsi, kalinlik, bekleyen_m2, termin_tarihi 
-        FROM siparisler 
-        WHERE durum='Bekliyor' 
-        ORDER BY termin_tarihi ASC, siparis_tarihi ASC 
-    """)
-    bekleyen_siparisler = cur.fetchall()
+    # KRİTİK KISIM: Termin tarihine göre sıralama
+    cur.execute("""
+        SELECT id, cinsi, kalinlik, bekleyen_m2, termin_tarihi 
+        FROM siparisler 
+        WHERE durum='Bekliyor' 
+        ORDER BY termin_tarihi ASC, siparis_tarihi ASC 
+    """)
+    bekleyen_siparisler = cur.fetchall()
 
-    siva_uretim_ihtiyaci = [] 
-    toplam_gerekli_siva = 0 
-    planlama_sonuclari = {} 
-    temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
-    
-    for siparis in bekleyen_siparisler:
-        key = (siparis['cinsi'], siparis['kalinlik'])
-        stok_sivali = temp_stok_sivali.get(key, 0)
-        gerekli_m2 = siparis['bekleyen_m2']
-        eksik_sivali = max(0, gerekli_m2 - stok_sivali)
-        temp_stok_sivali[key] = max(0, stok_sivali - gerekli_m2) 
+    siva_uretim_ihtiyaci = [] 
+    toplam_gerekli_siva = 0 
+    planlama_sonuclari = {} 
+    temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
+    
+    for siparis in bekleyen_siparisler:
+        key = (siparis['cinsi'], siparis['kalinlik'])
+        stok_sivali = temp_stok_sivali.get(key, 0)
+        gerekli_m2 = siparis['bekleyen_m2']
+        eksik_sivali = max(0, gerekli_m2 - stok_sivali)
+        temp_stok_sivali[key] = max(0, stok_sivali - gerekli_m2) 
 
-        if eksik_sivali > 0:
-            toplam_gerekli_siva += eksik_sivali
-            siva_uretim_ihtiyaci.append({
-                'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
-                'm2': eksik_sivali
-            })
-            
-        is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
-        planlama_sonuclari[siparis['id']] = is_gunu if eksik_sivali > 0 else 0
+        if eksik_sivali > 0:
+            toplam_gerekli_siva += eksik_sivali
+            siva_uretim_ihtiyaci.append({
+                'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                'm2': eksik_sivali
+            })
+            
+        is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
+        planlama_sonuclari[siparis['id']] = is_gunu if eksik_sivali > 0 else 0
 
-    # Hesaplanan iş günlerini veritabanına kaydet
-    for siparis_id, is_gunu in planlama_sonuclari.items():
-        # PostgreSQL'de UPDATE sorgusu
-        cur.execute("UPDATE siparisler SET planlanan_is_gunu = %s WHERE id = %s", (is_gunu, siparis_id))
-    conn.commit()
-    
-    # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
-    siva_plan_detay = defaultdict(list) 
-    kalan_kapasite_bugun = 0
-    ihtiyac_index = 0
-    
-    for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
-        kalan_kapasite_bugun = kapasite
-        
-        while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_ihtiyaci):
-            ihtiyac = siva_uretim_ihtiyaci[ihtiyac_index]
-            key = ihtiyac['key']
-            m2_gerekli = ihtiyac['m2']
-            
-            m2_yapilacak = min(m2_gerekli, kalan_kapasite_bugun)
-            
-            siva_plan_detay[gun].append({
-                'cinsi': key,
-                'm2': m2_yapilacak
-            })
-            
-            ihtiyac['m2'] -= m2_yapilacak
-            kalan_kapasite_bugun -= m2_yapilacak
-            
-            if ihtiyac['m2'] <= 0:
-                ihtiyac_index += 1
-            
-        if ihtiyac_index >= len(siva_uretim_ihtiyaci):
-            break 
-    
-    # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
-    bugun = datetime.now().date()
-    sevkiyat_plan_detay = defaultdict(list)
-    for i in range(0, 5): 
-        plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
-        # PostgreSQL'de SELECT sorgusu
-        cur.execute("""
-            SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
-            FROM siparisler 
-            WHERE durum='Bekliyor' AND termin_tarihi = %s
-            ORDER BY termin_tarihi ASC
-        """, (plan_tarihi,))
-        sevkiyatlar = cur.fetchall()
-        
-        if sevkiyatlar:
-            # RealDictCursor zaten sözlük listesi döndürür
-            sevkiyat_plan_detay[plan_tarihi] = sevkiyatlar
-    
-    cur.close()
-    return toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map
+    # Hesaplanan iş günlerini veritabanına kaydet
+    for siparis_id, is_gunu in planlama_sonuclari.items():
+        # PostgreSQL'de UPDATE sorgusu
+        cur.execute("UPDATE siparisler SET planlanan_is_gunu = %s WHERE id = %s", (is_gunu, siparis_id))
+    conn.commit()
+    
+    # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
+    siva_plan_detay = defaultdict(list) 
+    kalan_kapasite_bugun = 0
+    ihtiyac_index = 0
+    
+    for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
+        kalan_kapasite_bugun = kapasite
+        
+        while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_ihtiyaci):
+            ihtiyac = siva_uretim_ihtiyaci[ihtiyac_index]
+            key = ihtiyac['key']
+            m2_gerekli = ihtiyac['m2']
+            
+            m2_yapilacak = min(m2_gerekli, kalan_kapasite_bugun)
+            
+            siva_plan_detay[gun].append({
+                'cinsi': key,
+                'm2': m2_yapilacak
+            })
+            
+            ihtiyac['m2'] -= m2_yapilacak
+            kalan_kapasite_bugun -= m2_yapilacak
+            
+            if ihtiyac['m2'] <= 0:
+                ihtiyac_index += 1
+            
+        if ihtiyac_index >= len(siva_uretim_ihtiyaci):
+            break 
+    
+    # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
+    bugun = datetime.now().date()
+    sevkiyat_plan_detay = defaultdict(list)
+    for i in range(0, 5): 
+        plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
+        # PostgreSQL'de SELECT sorgusu
+        cur.execute("""
+            SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
+            FROM siparisler 
+            WHERE durum='Bekliyor' AND termin_tarihi = %s
+            ORDER BY termin_tarihi ASC
+        """, (plan_tarihi,))
+        sevkiyatlar = cur.fetchall()
+        
+        if sevkiyatlar:
+            # RealDictCursor zaten sözlük listesi döndürür
+            sevkiyat_plan_detay[plan_tarihi] = sevkiyatlar
+    
+    cur.close()
+    return toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map
 
 
 # --- 3. ROTALAR (PC Arayüzü ve İşlemler) ---
 
 @app.route('/', methods=['GET'])
 def index():
-    """Ana PC arayüzünü (veri giriş ve kapsamlı tablolar) gösterir."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    message = request.args.get('message')
-    gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
-    toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
-    
-    stok_list = []
-    for cinsi, kalinlik in VARYANTLAR:
-        ham_m2 = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-        sivali_m2 = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
-        
-        # PostgreSQL'de SUM sorgusu
-        cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
-        bekleyen_m2_raw = cur.fetchone()
-        
-        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
-        sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
-        ham_eksik = max(0, sivali_eksik - ham_m2)
-        stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
-    
-    cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
-    siparisler = cur.fetchall()
-    next_siparis_kodu = get_next_siparis_kodu(conn)
-    today = datetime.now().strftime('%Y-%m-%d')
-    cur.close()
-    conn.close()
-    
-    # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
-    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP)
+    """Ana PC arayüzünü (veri giriş ve kapsamlı tablolar) gösterir."""
+    # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
+    conn = get_db_connection() 
+    cur = conn.cursor()
+    message = request.args.get('message')
+    gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
+    toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
+    
+    stok_list = []
+    for cinsi, kalinlik in VARYANTLAR:
+        ham_m2 = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
+        sivali_m2 = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+        
+        # PostgreSQL'de SUM sorgusu
+        cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
+        bekleyen_m2_raw = cur.fetchone()
+        
+        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
+        sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
+        ham_eksik = max(0, sivali_eksik - ham_m2)
+        stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
+    
+    cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
+    siparisler = cur.fetchall()
+    next_siparis_kodu = get_next_siparis_kodu(conn)
+    today = datetime.now().strftime('%Y-%m-%d')
+    cur.close()
+    conn.close()
+    
+    # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
+    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP)
 
 @app.route('/islem', methods=['POST'])
 def handle_stok_islem():
-    """Stok hareketlerini yönetir."""
-    action = request.form['action']
-    cinsi = request.form['cinsi']
-    kalinlik = request.form['kalinlik']
-    m2 = int(request.form['m2'])
-    conn = None
-    message = ""
-    success = True
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+    """Stok hareketlerini yönetir."""
+    action = request.form['action']
+    cinsi = request.form['cinsi']
+    kalinlik = request.form['kalinlik']
+    m2 = int(request.form['m2'])
+    conn = None
+    message = ""
+    success = True
+    try:
+        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
+        conn = get_db_connection() 
+        cur = conn.cursor()
 
-        # SQL sorgularını %s parametreleriyle değiştirildi
-        if action == 'ham_alim': 
-            cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
-            message = f"✅ {cinsi} {kalinlik} Ham stoğuna {m2} m² eklendi."
-        
-        elif action == 'siva_uygula':
-            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (cinsi, kalinlik))
-            ham_stok = cur.fetchone()['m2']
-            if ham_stok < m2: 
-                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Ham stoğu yetersiz ({ham_stok} m²). {m2} m² Sıva uygulanamadı."
-            else: 
-                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
-                cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
-                message = f"✅ {cinsi} {kalinlik} için {m2} m² Sıva Uygulandı (Ham -> Sıvalı)."
-        
-        elif action == 'sat_sivali':
-            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (cinsi, kalinlik))
-            sivali_stok = cur.fetchone()['m2']
-            if sivali_stok < m2: 
-                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Sıvalı stoğu yetersiz ({sivali_stok} m²). {m2} m² Satış yapılamadı."
-            else: 
-                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
-                message = f"✅ {cinsi} {kalinlik} Sıvalı stoğundan {m2} m² Satıldı."
-        
-        elif action == 'sat_ham':
-            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (cinsi, kalinlik))
-            ham_stok = cur.fetchone()['m2']
-            if ham_stok < m2: 
-                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Ham stoğu yetersiz ({ham_stok} m²). {m2} m² Satış yapılamadı."
-            else: 
-                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
-                message = f"✅ {cinsi} {kalinlik} Ham stoğundan {m2} m² Satıldı."
-        
-        elif action == 'iptal_ham_alim':
-            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (cinsi, kalinlik))
-            ham_stok = cur.fetchone()['m2']
-            if ham_stok < m2: 
-                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Ham stoğu yetersiz ({ham_stok} m²). Ham alımı iptal edilemedi."
-            else: 
-                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
-                message = f"✅ {cinsi} {kalinlik} Ham alımı iptal edildi ({m2} m² stoktan çıkarıldı)."
-        
-        elif action == 'iptal_siva':
-            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (cinsi, kalinlik))
-            sivali_stok = cur.fetchone()['m2']
-            if sivali_stok < m2: 
-                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Sıvalı stoğu yetersiz ({sivali_stok} m²). Sıva Geri Alınamadı."
-            else: 
-                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
-                cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
-                message = f"✅ {cinsi} {kalinlik} Sıva işlemi geri alındı ({m2} m² Sıvalı -> Ham)."
-        
-        elif action == 'iptal_sat_sivali': 
-            cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
-            message = f"✅ {cinsi} {kalinlik} Sıvalı satış iptal edildi ({m2} m² stoğa eklendi)."
-        
-        elif action == 'iptal_sat_ham': 
-            cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
-            message = f"✅ {cinsi} {kalinlik} Ham satış iptal edildi ({m2} m² stoğa eklendi)."
+        # SQL sorgularını %s parametreleriyle değiştirildi
+        if action == 'ham_alim': 
+            cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
+            message = f"✅ {cinsi} {kalinlik} Ham stoğuna {m2} m² eklendi."
+        
+        elif action == 'siva_uygula':
+            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (cinsi, kalinlik))
+            ham_stok = cur.fetchone()['m2']
+            if ham_stok < m2: 
+                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Ham stoğu yetersiz ({ham_stok} m²). {m2} m² Sıva uygulanamadı."
+            else: 
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
+                cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
+                message = f"✅ {cinsi} {kalinlik} için {m2} m² Sıva Uygulandı (Ham -> Sıvalı)."
+        
+        elif action == 'sat_sivali':
+            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (cinsi, kalinlik))
+            sivali_stok = cur.fetchone()['m2']
+            if sivali_stok < m2: 
+                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Sıvalı stoğu yetersiz ({sivali_stok} m²). {m2} m² Satış yapılamadı."
+            else: 
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
+                message = f"✅ {cinsi} {kalinlik} Sıvalı stoğundan {m2} m² Satıldı."
+        
+        elif action == 'sat_ham':
+            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (cinsi, kalinlik))
+            ham_stok = cur.fetchone()['m2']
+            if ham_stok < m2: 
+                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Ham stoğu yetersiz ({ham_stok} m²). {m2} m² Satış yapılamadı."
+            else: 
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
+                message = f"✅ {cinsi} {kalinlik} Ham stoğundan {m2} m² Satıldı."
+        
+        elif action == 'iptal_ham_alim':
+            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (cinsi, kalinlik))
+            ham_stok = cur.fetchone()['m2']
+            if ham_stok < m2: 
+                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Ham stoğu yetersiz ({ham_stok} m²). Ham alımı iptal edilemedi."
+            else: 
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
+                message = f"✅ {cinsi} {kalinlik} Ham alımı iptal edildi ({m2} m² stoktan çıkarıldı)."
+        
+        elif action == 'iptal_siva':
+            cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (cinsi, kalinlik))
+            sivali_stok = cur.fetchone()['m2']
+            if sivali_stok < m2: 
+                success = False; message = f"❌ Hata: {cinsi} {kalinlik} Sıvalı stoğu yetersiz ({sivali_stok} m²). Sıva Geri Alınamadı."
+            else: 
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
+                cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
+                message = f"✅ {cinsi} {kalinlik} Sıva işlemi geri alındı ({m2} m² Sıvalı -> Ham)."
+        
+        elif action == 'iptal_sat_sivali': 
+            cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (m2, cinsi, kalinlik))
+            message = f"✅ {cinsi} {kalinlik} Sıvalı satış iptal edildi ({m2} m² stoğa eklendi)."
+        
+        elif action == 'iptal_sat_ham': 
+            cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
+            message = f"✅ {cinsi} {kalinlik} Ham satış iptal edildi ({m2} m² stoğa eklendi)."
 
-        if success: conn.commit()
-        cur.close()
-    except Exception as e: 
-        if conn: conn.rollback()
-        message = f"❌ Veritabanı Hatası: {str(e)}"
-    finally: 
-        if conn: conn.close()
-    return redirect(url_for('index', message=message))
+        if success: conn.commit()
+        cur.close()
+    except Exception as e: 
+        if conn: conn.rollback()
+        message = f"❌ Veritabanı Hatası: {str(e)}"
+    finally: 
+        if conn: conn.close()
+    return redirect(url_for('index', message=message))
 
 @app.route('/siparis', methods=['POST'])
 def handle_siparis_islem():
-    """Sipariş ekler, tamamlar veya iptal eder."""
-    action = request.form['action']
-    conn = None
-    message = ""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        if action == 'yeni_siparis':
-            siparis_kodu = get_next_siparis_kodu(conn)
-            urun_kodu = request.form['urun_kodu']
-            cinsi = request.form['cinsi']
-            kalinlik = request.form['kalinlik']
-            musteri = request.form['musteri']
-            siparis_tarihi = request.form['siparis_tarihi']
-            termin_tarihi = request.form['termin_tarihi']
-            m2 = int(request.form['m2'])
-            
-            # PostgreSQL'de INSERT sorgusu
-            cur.execute(""" INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, bekleyen_m2, durum, planlanan_is_gunu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """, (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, m2, 'Bekliyor', 0))
-            
-            conn.commit(); message = f"✅ Sipariş {siparis_kodu} ({urun_kodu}) {m2} m² olarak {musteri} adına eklendi."
-            
-        elif action == 'tamamla_siparis':
-            siparis_id = request.form['siparis_id']
-            # PostgreSQL'de UPDATE sorgusu
-            cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
-            
-        elif action == 'iptal_siparis':
-            siparis_id = request.form['siparis_id']
-            # PostgreSQL'de UPDATE sorgusu
-            cur.execute("UPDATE siparisler SET durum = 'Iptal', bekleyen_m2 = 0, planlanan_is_gunu = -1 WHERE id = %s", (siparis_id,))
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} iptal edildi olarak işaretlendi."
-            
-        cur.close()
-    except psycopg2.IntegrityError: 
-        if conn: conn.rollback()
-        message = "❌ Hata: Bu sipariş kodu zaten mevcut. Lütfen tekrar deneyin."
-    except Exception as e: 
-        if conn: conn.rollback()
-        message = f"❌ Veritabanı Hatası: {str(e)}"
-    finally: 
-        if conn: conn.close()
-    return redirect(url_for('index', message=message))
+    """Sipariş ekler, tamamlar veya iptal eder."""
+    action = request.form['action']
+    conn = None
+    message = ""
+    try:
+        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        if action == 'yeni_siparis':
+            siparis_kodu = get_next_siparis_kodu(conn)
+            urun_kodu = request.form['urun_kodu']
+            cinsi = request.form['cinsi']
+            kalinlik = request.form['kalinlik']
+            musteri = request.form['musteri']
+            siparis_tarihi = request.form['siparis_tarihi']
+            termin_tarihi = request.form['termin_tarihi']
+            m2 = int(request.form['m2'])
+            
+            # PostgreSQL'de INSERT sorgusu
+            cur.execute(""" INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, bekleyen_m2, durum, planlanan_is_gunu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """, (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, m2, 'Bekliyor', 0))
+            
+            conn.commit(); message = f"✅ Sipariş {siparis_kodu} ({urun_kodu}) {m2} m² olarak {musteri} adına eklendi."
+            
+        elif action == 'tamamla_siparis':
+            siparis_id = request.form['siparis_id']
+            # PostgreSQL'de UPDATE sorgusu
+            cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
+            
+        elif action == 'iptal_siparis':
+            siparis_id = request.form['siparis_id']
+            # PostgreSQL'de UPDATE sorgusu
+            cur.execute("UPDATE siparisler SET durum = 'Iptal', bekleyen_m2 = 0, planlanan_is_gunu = -1 WHERE id = %s", (siparis_id,))
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} iptal edildi olarak işaretlendi."
+            
+        cur.close()
+    except psycopg2.IntegrityError: 
+        if conn: conn.rollback()
+        message = "❌ Hata: Bu sipariş kodu zaten mevcut. Lütfen tekrar deneyin."
+    except Exception as e: 
+        if conn: conn.rollback()
+        message = f"❌ Veritabanı Hatası: {str(e)}"
+    finally: 
+        if conn: conn.close()
+    return redirect(url_for('index', message=message))
 
 @app.route('/ayarla/kapasite', methods=['POST'])
 def ayarla_kapasite():
-    """Günlük sıva kapasitesini ayarlar."""
-    # JSON dosya tabanlı olduğu için değişiklik yapılmadı.
-    try:
-        kapasite_m2 = int(request.form['kapasite_m2'])
-        if kapasite_m2 <= 0: raise ValueError("Kapasite pozitif bir sayı olmalıdır.")
-        save_data({"gunluk_siva_m2": kapasite_m2}, KAPASITE_FILE)
-        message = f"✅ Günlük sıva kapasitesi {kapasite_m2} m² olarak ayarlandı."
-    except ValueError as e: message = f"❌ Hata: {str(e)}"
-    except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
-    return redirect(url_for('index', message=message))
+    """Günlük sıva kapasitesini ayarlar."""
+    # JSON dosya tabanlı olduğu için değişiklik yapılmadı.
+    try:
+        kapasite_m2 = int(request.form['kapasite_m2'])
+        if kapasite_m2 <= 0: raise ValueError("Kapasite pozitif bir sayı olmalıdır.")
+        save_data({"gunluk_siva_m2": kapasite_m2}, KAPASITE_FILE)
+        message = f"✅ Günlük sıva kapasitesi {kapasite_m2} m² olarak ayarlandı."
+    except ValueError as e: message = f"❌ Hata: {str(e)}"
+    except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
+    return redirect(url_for('index', message=message))
 
 @app.route('/ayarla/urun_kodu', methods=['POST'])
 def ayarla_urun_kodu():
-    """Yeni bir ürün kodu ekler."""
-    # JSON dosya tabanlı olduğu için değişiklik yapılmadı.
-    yeni_kod = request.form['yeni_urun_kodu'].strip().upper()
-    cins_kalinlik_key = request.form['cinsi']
-    urun_kodlari_map = load_data('urun_kodlari.json')
-    message = ""
-    try:
-        tum_kodlar = [kod for kodlar in urun_kodlari_map.values() for kod in kodlar]
-        if yeni_kod in tum_kodlar: message = f"❌ Hata: Ürün kodu **{yeni_kod}** zaten mevcut."
-        else:
-            if cins_kalinlik_key not in urun_kodlari_map: urun_kodlari_map[cins_kalinlik_key] = []
-            urun_kodlari_map[cins_kalinlik_key].append(yeni_kod); urun_kodlari_map[cins_kalinlik_key].sort()
-            save_data(urun_kodlari_map, 'urun_kodlari.json')
-            message = f"✅ Ürün kodu **{yeni_kod}** ({cins_kalinlik_key}) başarıyla eklendi."
-    except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
-    return redirect(url_for('index', message=message))
+    """Yeni bir ürün kodu ekler."""
+    # JSON dosya tabanlı olduğu için değişiklik yapılmadı.
+    yeni_kod = request.form['yeni_urun_kodu'].strip().upper()
+    cins_kalinlik_key = request.form['cinsi']
+    urun_kodlari_map = load_data('urun_kodlari.json')
+    message = ""
+    try:
+        tum_kodlar = [kod for kodlar in urun_kodlari_map.values() for kod in kodlar]
+        if yeni_kod in tum_kodlar: message = f"❌ Hata: Ürün kodu **{yeni_kod}** zaten mevcut."
+        else:
+            if cins_kalinlik_key not in urun_kodlari_map: urun_kodlari_map[cins_kalinlik_key] = []
+            urun_kodlari_map[cins_kalinlik_key].append(yeni_kod); urun_kodlari_map[cins_kalinlik_key].sort()
+            save_data(urun_kodlari_map, 'urun_kodlari.json')
+            message = f"✅ Ürün kodu **{yeni_kod}** ({cins_kalinlik_key}) başarıyla eklendi."
+    except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
+    return redirect(url_for('index', message=message))
 
 
 # --- 4. MOBİL İÇİN ROTALAR (JSON API ve HTML GÖRÜNÜMÜ) ---
 
 @app.route('/api/stok', methods=['GET'])
 def api_stok_verileri():
-    """Mobil görünüm için stok, sipariş ve planlama verilerini JSON olarak döndürür."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    # Tüm analiz ve planlama verilerini hesaplar (PostgreSQL bağlantısı ile)
-    toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
-    
-    stok_data = {}
-    deficit_analysis = {}
+    """Mobil görünüm için stok, sipariş ve planlama verilerini JSON olarak döndürür."""
+    # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    # Tüm analiz ve planlama verilerini hesaplar (PostgreSQL bağlantısı ile)
+    toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
+    
+    stok_data = {}
+    deficit_analysis = {}
 
-    for cinsi, kalinlik in VARYANTLAR:
-        key = f"{cinsi} {kalinlik}"
-        stok_data[f"{key} (Ham)"] = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-        stok_data[f"{key} (Sivali)"] = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
-        
-        # PostgreSQL'de SUM sorgusu
-        cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
-        bekleyen_m2_raw = cur.fetchone()
-        
-        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
-        sivali_stok = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
-        ham_stok = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-        sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
-        ham_eksik = max(0, sivali_eksik - ham_stok)
-        
-        if gerekli_siparis_m2 > 0:
-            deficit_analysis[key] = {
-                'sivali_deficit': sivali_eksik,
-                'ham_deficit': ham_eksik,
-                'ham_coverage': max(0, sivali_eksik - max(0, sivali_eksik - ham_stok)) 
-            }
+    for cinsi, kalinlik in VARYANTLAR:
+        key = f"{cinsi} {kalinlik}"
+        stok_data[f"{key} (Ham)"] = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
+        stok_data[f"{key} (Sivali)"] = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+        
+        # PostgreSQL'de SUM sorgusu
+        cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
+        bekleyen_m2_raw = cur.fetchone()
+        
+        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
+        sivali_stok = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+        ham_stok = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
+        sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
+        ham_eksik = max(0, sivali_eksik - ham_stok)
+        
+        if gerekli_siparis_m2 > 0:
+            deficit_analysis[key] = {
+                'sivali_deficit': sivali_eksik,
+                'ham_deficit': ham_eksik,
+                'ham_coverage': max(0, sivali_eksik - max(0, sivali_eksik - ham_stok)) 
+            }
 
-    cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
-    siparisler = cur.fetchall()
-    # RealDictCursor zaten sözlük listesi döndürür
-    siparis_listesi = siparisler
-    
-    cur.close()
-    conn.close()
+    cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
+    siparisler = cur.fetchall()
+    # RealDictCursor zaten sözlük listesi döndürür
+    siparis_listesi = siparisler
+    
+    cur.close()
+    conn.close()
 
-    # Mobil arayüzün beklediği tüm veriyi döndür
-    return jsonify({
-        'stok': stok_data,
-        'deficit_analysis': deficit_analysis,
-        'siparisler': siparis_listesi,
-        'toplam_gerekli_siva': toplam_gerekli_siva,
-        'gunluk_siva_m2': gunluk_siva_m2,
-        'siva_plan_detay': dict(siva_plan_detay), 
-        'sevkiyat_plan_detay': dict(sevkiyat_plan_detay) 
-    })
+    # Mobil arayüzün beklediği tüm veriyi döndür
+    return jsonify({
+        'stok': stok_data,
+        'deficit_analysis': deficit_analysis,
+        'siparisler': siparis_listesi,
+        'toplam_gerekli_siva': toplam_gerekli_siva,
+        'gunluk_siva_m2': gunluk_siva_m2,
+        'siva_plan_detay': dict(siva_plan_detay), 
+        'sevkiyat_plan_detay': dict(sevkiyat_plan_detay) 
+    })
 
 
 @app.route('/mobil', methods=['GET'])
 def mobil_gorunum():
-    """
-    Telefonlar için tasarlanmış, veri girişi içermeyen 
-    stok_goruntule.html şablonunu templates/ klasöründen sunar.
-    """
-    # templates/stok_goruntule.html dosyasını yükler
-    return render_template('stok_goruntule.html')
+    """
+    Telefonlar için tasarlanmış, veri girişi içermeyen 
+    stok_goruntule.html şablonunu templates/ klasöründen sunar.
+    """
+    # templates/stok_goruntule.html dosyasını yükler
+    return render_template('stok_goruntule.html')
 
 
 # --- HTML ŞABLONU (PC Arayüzü) ---
@@ -585,34 +596,34 @@ HTML_TEMPLATE = '''
         .siparis-iptal { background-color: #ffe0e0; color: darkred; }
         .stok-table th:nth-child(1) { width: 15%; } .stok-table th:nth-child(2) { width: 10%; } .stok-table th:nth-child(3) { width: 10%; } .stok-table th:nth-child(4) { width: 10%; } .stok-table th:nth-child(5) { width: 10%; } .stok-table th:nth-child(6) { width: 10%; }
         .siparis-table th:nth-child(1) { width: 5%; } .siparis-table th:nth-child(4), .siparis-table th:nth-child(5) { width: 10%; } .siparis-table th:nth-child(7), .siparis-table th:nth-child(8) { width: 10%; } .siparis-table th:nth-child(10) { width: 10%; }
-        
-        /* --- YENİ MOBİL UYUM DÜZENLEMELERİ --- */
-        
-        /* Mobil Cihazlar İçin Tablo Kaydırma */
-        .table-responsive {
-            overflow-x: auto; /* Yatay kaydırmayı etkinleştirir */
-            margin-top: 15px;
-        }
+        
+        /* --- YENİ MOBİL UYUM DÜZENLEMELERİ --- */
+        
+        /* Mobil Cihazlar İçin Tablo Kaydırma */
+        .table-responsive {
+            overflow-x: auto; /* Yatay kaydırmayı etkinleştirir */
+            margin-top: 15px;
+        }
 
-        /* Mobil Sipariş Tablosu Genişlik Ayarları */
-        .siparis-table {
-            min-width: 900px; /* Mobil görünümde kaydırmayı zorlamak için minimum genişlik */
-            table-layout: auto; /* Otomatik sütun genişliği */
-        }
-        .siparis-table th, .siparis-table td {
-            white-space: nowrap; /* İçeriğin kaydırılmasını sağlar */
-        }
-        .siparis-table th:nth-child(1) { width: 50px; } /* ID */
-        .siparis-table th:nth-child(2) { width: 100px; } /* Kod */
-        .siparis-table th:nth-child(3) { width: 180px; } /* Ürün (En uzun olan) */
-        .siparis-table th:nth-child(4) { width: 150px; } /* Müşteri */
-        .siparis-table th:nth-child(5) { width: 100px; } /* Sipariş Tarihi */
-        .siparis-table th:nth-child(6) { width: 100px; } /* Termin Tarihi */
-        .siparis-table th:nth-child(7) { width: 80px; } /* Bekleyen M² */
-        .siparis-table th:nth-child(8) { width: 90px; } /* Durum */
-        .siparis-table th:nth-child(9) { width: 120px; } /* Planlanan İş Günü */
-        .siparis-table th:nth-child(10) { width: 160px; } /* İşlem */
-        
+        /* Mobil Sipariş Tablosu Genişlik Ayarları */
+        .siparis-table {
+            min-width: 900px; /* Mobil görünümde kaydırmayı zorlamak için minimum genişlik */
+            table-layout: auto; /* Otomatik sütun genişliği */
+        }
+        .siparis-table th, .siparis-table td {
+            white-space: nowrap; /* İçeriğin kaydırılmasını sağlar */
+        }
+        .siparis-table th:nth-child(1) { width: 50px; } /* ID */
+        .siparis-table th:nth-child(2) { width: 100px; } /* Kod */
+        .siparis-table th:nth-child(3) { width: 180px; } /* Ürün (En uzun olan) */
+        .siparis-table th:nth-child(4) { width: 150px; } /* Müşteri */
+        .siparis-table th:nth-child(5) { width: 100px; } /* Sipariş Tarihi */
+        .siparis-table th:nth-child(6) { width: 100px; } /* Termin Tarihi */
+        .siparis-table th:nth-child(7) { width: 80px; } /* Bekleyen M² */
+        .siparis-table th:nth-child(8) { width: 90px; } /* Durum */
+        .siparis-table th:nth-child(9) { width: 120px; } /* Planlanan İş Günü */
+        .siparis-table th:nth-child(10) { width: 160px; } /* İşlem */
+        
     </style>
     <script>
         const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
@@ -788,7 +799,7 @@ HTML_TEMPLATE = '''
             {% endfor %}
         </table>
         <h2 style="margin-top: 30px;">4. Sipariş Listesi</h2>
-        <div class="table-responsive">
+        <div class="table-responsive">
         <table class="siparis-table">
             <tr>
                 <th>ID</th>
@@ -844,7 +855,7 @@ HTML_TEMPLATE = '''
             </tr>
             {% endfor %}
         </table>
-        </div>
+        </div>
     </div>
 </body>
 </html>
