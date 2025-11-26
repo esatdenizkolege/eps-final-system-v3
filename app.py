@@ -770,6 +770,7 @@ HTML_TEMPLATE = '''
             // Yeni eklenen satırdaki kodları filtrele
             const newRow = container.querySelector(`[data-index="${siparisSatirIndex}"]`);
             const cinsiSelect = newRow.querySelector('.cinsi_select');
+            // Yeni eklenen satırın ilk elementi (cinsiSelect) üzerinden filtreleme başlatılıyor.
             filterProductCodes(cinsiSelect);
 
             siparisSatirIndex++;
@@ -978,3 +979,77 @@ HTML_TEMPLATE = '''
                 <td>{{ stok.ham_m2 }}</td>
                 <td>{{ stok.sivali_m2 }}</td>
                 <td>{{ stok.gerekli_siparis_m2 }}</td>
+                <td class="{% if stok.sivali_eksik > 0 %}deficit-sivali{% endif %}">{{ stok.sivali_eksik }}</td>
+                <td class="{% if stok.ham_eksik > 0 %}deficit-ham{% endif %}">{{ stok.ham_eksik }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        
+        <h2 style="margin-top: 30px;">4. Sipariş Listesi</h2>
+        <div class="table-responsive">
+        <table class="siparis-table">
+            <tr>
+                <th>ID</th>
+                <th>Kod</th>
+                <th>Ürün</th>
+                <th>Müşteri</th>
+                <th>Sipariş Tarihi</th>
+                <th>Termin Tarihi</th>
+                <th>Bekleyen M²</th>
+                <th>Durum</th>
+                <th>Planlanan İş Günü (Sıva)</th>
+                <th>İşlem</th>
+            </tr>
+            {% for siparis in siparisler %}
+            <tr class="{{ 'siparis-tamamlandi' if siparis.durum == 'Tamamlandi' else ('siparis-iptal' if siparis.durum == 'Iptal' else '') }}">
+                <td>{{ siparis.id }}</td>
+                <td>{{ siparis.siparis_kodu }}</td>
+                <td>{{ siparis.urun_kodu }} ({{ siparis.cinsi }} {{ siparis.kalinlik }})</td>
+                <td>{{ siparis.musteri }}</td>
+                <td>{{ siparis.siparis_tarihi }}</td>
+                <td>{{ siparis.termin_tarihi }}</td>
+                <td>{{ siparis.bekleyen_m2 }}</td>
+                <td>{{ siparis.durum }}</td>
+                <td>
+                    {% if siparis.durum == 'Bekliyor' %}
+                        {% if siparis.planlanan_is_gunu == 0 %}
+                            <span style="color:green; font-weight:bold;">Hemen Stoktan (0)</span>
+                        {% elif siparis.planlanan_is_gunu > 0 %}
+                            <span style="color:darkorange; font-weight:bold;">Gün {{ siparis.planlanan_is_gunu }}</span>
+                        {% else %}
+                            Planlanamaz (Kapasite Yok)
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if siparis.durum == 'Bekliyor' %}
+                        <!-- DÜZENLE BUTONU -->
+                        <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
+                        
+                        <!-- KALICI SİL BUTONU -->
+                        <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
+                            <input type="hidden" name="action" value="sil_siparis">
+                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                            <button type="submit" style="background-color: darkred; padding: 4px 8px; margin-right: 5px;">Kalıcı Sil</button>
+                        </form>
+                        
+                        <!-- TAMAMLA BUTONU -->
+                        <form action="/siparis" method="POST" style="display:inline-block;">
+                            <input type="hidden" name="action" value="tamamla_siparis">
+                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                            <button type="submit" style="background-color: green; padding: 4px 8px;">Tamamla</button>
+                        </form>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+    </div>
+</body>
+</html>
+'''
