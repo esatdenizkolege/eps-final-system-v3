@@ -556,7 +556,7 @@ def handle_siparis_islem():
                         siparis_kodu = get_next_siparis_kodu(conn)
                         
                         # Ürün kodundan cinsi ve kalınlığı ayrıştır
-                        global CINS_TO_BOYALI_MAP
+                        # CINS_TO_BOYALI_MAP'i sadece okuduğumuz için 'global' bildirimine gerek yoktur.
                         cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
                         if not cins_kalinlik_key:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
@@ -590,7 +590,7 @@ def handle_siparis_islem():
             yeni_m2 = int(request.form['yeni_m2'])
             
             # Ürün kodundan cins/kalınlık tespiti
-            global CINS_TO_BOYALI_MAP # Global haritayı kullan
+            global CINS_TO_BOYALI_MAP # Sadece bu blokta global'e ihtiyacımız var (ürün kodundan çekme)
             cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
             if not cins_kalinlik_key:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
@@ -766,7 +766,7 @@ def temizle_veritabani():
         # Stokları sil
         cur.execute("DELETE FROM stok")
         
-        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+        # YENİ: Kalınlıklar ve Cinsler değişebileceği için VARYANTLAR'ı tekrar oluştur
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
@@ -800,7 +800,7 @@ def api_stok_verileri():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+        # YENİ: Kalınlıklar ve Cinsler değişebileceği için VARYANTLAR'ı tekrar oluştur
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
