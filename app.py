@@ -251,9 +251,15 @@ def calculate_planning(conn):
         temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
         
         for siparis in bekleyen_siparisler:
-            # Siparişlerdeki cinsi/kalinlik da temizleniyor olmalı, ancak zaten 
-            # siparişler Flask tarafından temiz stringlerle kaydediliyor.
-            key = (siparis['cinsi'], siparis['kalinlik'])
+            
+            # *** KEY ERROR DÜZELTMESİ BAŞLANGIÇ ***
+            # Sipariş verisinden gelen Cinsi ve Kalınlığı zorunlu olarak temizleyip formatla
+            # (Bu, veritabanında hatalı kayıt olsa bile, anlık analizi kurtarır.)
+            temiz_cinsi = siparis['cinsi'].strip().upper()
+            temiz_kalinlik = siparis['kalinlik'].strip().upper()
+            key = (temiz_cinsi, temiz_kalinlik)
+            # *** KEY ERROR DÜZELTMESİ BİTİŞ ***
+            
             stok_sivali_available = temp_stok_sivali.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
             
@@ -272,13 +278,13 @@ def calculate_planning(conn):
                 # KRİTİK DÜZELTME: Aynı ürünün ihtiyaçlarını birleştirmek için kontrol
                 found = False
                 for item in siva_uretim_ihtiyaci:
-                    if item['key'] == f"{siparis['cinsi']} {siparis['kalinlik']}":
+                    if item['key'] == f"{temiz_cinsi} {temiz_kalinlik}": # Temiz anahtar kullanıldı
                         item['m2'] += eksik_sivali
                         found = True
                         break
                 if not found:
                     siva_uretim_ihtiyaci.append({
-                        'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                        'key': f"{temiz_cinsi} {temiz_kalinlik}", # Temiz anahtar kullanıldı
                         'm2': eksik_sivali
                     })
                 
@@ -304,8 +310,12 @@ def calculate_planning(conn):
         temp_sivali_stok_kopyasi = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
 
         for siparis in bekleyen_siparisler:
-            # Sipariş tablosundan gelen verinin temizlendiği varsayılır.
-            key = (siparis['cinsi'], siparis['kalinlik'])
+            
+            # Sipariş verisini tekrar formatla (KeyError'ı engellemek için)
+            temiz_cinsi = siparis['cinsi'].strip().upper()
+            temiz_kalinlik = siparis['kalinlik'].strip().upper()
+            key = (temiz_cinsi, temiz_kalinlik)
+            
             stok_sivali_available = temp_sivali_stok_kopyasi.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
             
@@ -317,7 +327,7 @@ def calculate_planning(conn):
             
             if kalan_ihtiyac > 0:
                 siva_uretim_sirasli_ihtiyac.append({
-                    'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                    'key': f"{temiz_cinsi} {temiz_kalinlik}",
                     'm2': kalan_ihtiyac
                 })
 
@@ -583,7 +593,7 @@ def handle_siparis_islem():
             cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
             
-        # DÜZELTİLDİ: Siparişi Düzenleme (Global bildirim kaldırıldı)
+        # DÜZELTİLDİ: Siparişi Düzenleme (SyntaxError veren global bildirim kaldırıldı)
         elif action == 'duzenle_siparis':
             siparis_id = request.form['siparis_id']
             yeni_urun_kodu = request.form['yeni_urun_kodu']
@@ -766,7 +776,7 @@ def temizle_veritabani():
         # Stokları sil
         cur.execute("DELETE FROM stok")
         
-        # YENİ: Kalınlıklar ve Cinsler değişebileceği için VARYANTLAR'ı tekrar oluştur
+        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
@@ -800,7 +810,7 @@ def api_stok_verileri():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # YENİ: Kalınlıklar ve Cinsler değişebileceği için VARYANTLAR'ı tekrar oluştur
+        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
