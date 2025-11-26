@@ -227,11 +227,9 @@ def calculate_planning(conn):
         cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
         stok_raw = cur.fetchall()
         
-        # KRİTİK DÜZELTME: Stokları ham ve sıvalı olarak map'le (Tuple key: (cinsi, kalinlik))
-        # Veritabanından gelen stringleri temizle (.strip())
+        # STOK ANAHTAR OLUŞTURMA: Her zaman temiz (strip, upper)
         for row in stok_raw:
-            # Temizlenmiş (strip edilmiş) anahtar kullanılıyor
-            key = (row['cinsi'].strip(), row['kalinlik'].strip())
+            key = (row['cinsi'].strip().upper(), row['kalinlik'].strip().upper())
             if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
             stok_map[key][row['asama']] = row['m2']
 
@@ -252,13 +250,12 @@ def calculate_planning(conn):
         
         for siparis in bekleyen_siparisler:
             
-            # *** KEY ERROR DÜZELTMESİ: Sipariş anahtarı formatlaması ***
-            # Sipariş verisinden gelen Cinsi ve Kalınlığı zorunlu olarak temizleyip formatla
-            # Bu, hatalı kayıt olsa bile, anlık analizi kurtarır.
+            # *** SİPARİŞ ANAHTAR OLUŞTURMA: Her zaman temiz (KeyError'ı engellemek ve eşleşmeyi sağlamak için) ***
             temiz_cinsi = siparis['cinsi'].strip().upper()
             temiz_kalinlik = siparis['kalinlik'].strip().upper()
             key = (temiz_cinsi, temiz_kalinlik)
             
+            # Key'in stok haritasında var olmasını kontrol ediyoruz
             stok_sivali_available = temp_stok_sivali.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
             
@@ -269,34 +266,30 @@ def calculate_planning(conn):
             # Sıvalı stoğu azalt
             if key in temp_stok_sivali:
                  temp_stok_sivali[key] -= karsilanan_sivali
-            # Not: Eğer key stok_map'te yoksa, sipariş, henüz stok tablosunda olmayan yeni bir ürün demektir. Bu durumda geçici stok sıfır kalır ve hata vermez.
 
             # 2. Üretim İhtiyacını Hesapla (Ham Stoku Dikkate Almadan, sadece Sıva)
-            # Bu, sıvalı stoğu tükettikten sonra kalan ihtiyacın tamamıdır.
             eksik_sivali = kalan_ihtiyac 
             
             if eksik_sivali > 0:
                 # KRİTİK DÜZELTME: Aynı ürünün ihtiyaçlarını birleştirmek için kontrol
                 found = False
                 for item in siva_uretim_ihtiyaci:
-                    if item['key'] == f"{temiz_cinsi} {temiz_kalinlik}": # Temiz anahtar kullanıldı
+                    if item['key'] == f"{temiz_cinsi} {temiz_kalinlik}":
                         item['m2'] += eksik_sivali
                         found = True
                         break
                 if not found:
                     siva_uretim_ihtiyaci.append({
-                        'key': f"{temiz_cinsi} {temiz_kalinlik}", # Temiz anahtar kullanıldı
+                        'key': f"{temiz_cinsi} {temiz_kalinlik}",
                         'm2': eksik_sivali
                     })
                 
-            toplam_gerekli_siva += eksik_sivali # Sıva ihtiyacını birikimli olarak artır
+            toplam_gerekli_siva += eksik_sivali 
             
-            # Planlanan İş Günü hesaplaması (önceki planlama mantığına göre devam eder)
-            # Bu sadece görselleştirme içindir ve planlama mantığı bunu kullanır.
+            # Planlanan İş Günü hesaplaması
             current_total_siva_needed = sum(item['m2'] for item in siva_uretim_ihtiyaci)
             is_gunu = math.ceil(current_total_siva_needed / kapasite) if kapasite > 0 else -1
             planlama_sonuclari[siparis['id']] = is_gunu if current_total_siva_needed > 0 else 0 
-            # NOT: is_gunu hesaplaması birikimli olduğu için ilk sipariş 1, ikinci sipariş 2... gibi ilerler.
 
         # Hesaplanan iş günlerini veritabanına kaydet
         for siparis_id, is_gunu in planlama_sonuclari.items():
@@ -305,14 +298,11 @@ def calculate_planning(conn):
         
         # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
         
-        # sipariş listesinin sırasını koruyan, ama sadece ihtiyacı olanları içeren yeni bir liste oluşturalım.
-        
         siva_uretim_sirasli_ihtiyac = []
         temp_sivali_stok_kopyasi = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
 
         for siparis in bekleyen_siparisler:
             
-            # Sipariş verisini tekrar formatla (KeyError'ı engellemek için)
             temiz_cinsi = siparis['cinsi'].strip().upper()
             temiz_kalinlik = siparis['kalinlik'].strip().upper()
             key = (temiz_cinsi, temiz_kalinlik)
@@ -411,8 +401,13 @@ def index():
     
     # 3. Stok ve Eksik Analizi Listesini Oluştur
     stok_list = []
-    for cinsi, kalinlik in VARYANTLAR:
+    for cinsi_raw, kalinlik_raw in VARYANTLAR:
+        
+        # VARYANTLAR'daki Cinsi ve Kalınlığı temizle (Her zaman tutarlı)
+        cinsi = cinsi_raw.strip().upper()
+        kalinlik = kalinlik_raw.strip().upper()
         key = (cinsi, kalinlik)
+        
         # Stok map'i temizlenmiş anahtarlarla tutulduğu için burada sorunsuz alınabilir.
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
@@ -444,8 +439,11 @@ def index():
 def handle_stok_islem():
     """Stok hareketlerini yönetir."""
     action = request.form['action']
-    cinsi = request.form['cinsi']
-    kalinlik = request.form['kalinlik']
+    
+    # *** STOK İŞLEMLERİNDE GİRİŞ TEMİZLİĞİ ***
+    cinsi = request.form['cinsi'].strip().upper()
+    kalinlik = request.form['kalinlik'].strip().upper()
+    
     m2 = int(request.form['m2'])
     conn = None
     message = ""
@@ -576,7 +574,7 @@ def handle_siparis_islem():
                         # Kalınlıklar virgüllü olabilir (örn: 1.1 CM)
                         cinsi_raw, kalinlik_raw = cins_kalinlik_key.rsplit(' ', 1) 
                         
-                        # *** NİHAİ KRİTİK DÜZELTME: Veritabanına yazmadan önce temizle ve büyük harfe çevir ***
+                        # *** KRİTİK DÜZELTME: Veritabanına YAZARKEN temizle ve BÜYÜK HARFE çevir (Eşleşme için zorunlu) ***
                         cinsi = cinsi_raw.strip().upper() 
                         kalinlik = kalinlik_raw.strip().upper() 
                         
@@ -602,7 +600,6 @@ def handle_siparis_islem():
             yeni_m2 = int(request.form['yeni_m2'])
             
             # Ürün kodundan cins/kalınlık tespiti
-            # Global değişkeni sadece okuduğumuz için 'global' bildirimine gerek yoktur.
             cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
             if not cins_kalinlik_key:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
@@ -716,12 +713,15 @@ def ayarla_kalinlik():
         
         # Veritabanına ekle
         for c, k in new_variants_to_add:
+             # Burada da temizleme (strip.upper) zorunlu
+             temiz_c = c.strip().upper()
+             temiz_k = k.strip().upper()
              for asama in ['Ham', 'Sivali']:
                  cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
                     VALUES (%s, %s, %s, %s) 
                     ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
-                 """, (c, k, asama, 0))
+                 """, (temiz_c, temiz_k, asama, 0))
         
         conn.commit()
         
@@ -786,12 +786,14 @@ def temizle_veritabani():
         
         # Sıfır miktar ile varsayılan stokları yeniden ekle (init_db mantığı)
         for c, k in VARYANTLAR:
+            temiz_c = c.strip().upper()
+            temiz_k = k.strip().upper()
             for asama in ['Ham', 'Sivali']:
                 cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
                     VALUES (%s, %s, %s, %s) 
                     ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
-                """, (c, k, asama, 0))
+                """, (temiz_c, temiz_k, asama, 0))
                 
         conn.commit()
         return redirect(url_for('index', message="✅ TÜM VERİLER SİLİNDİ ve STOKLAR SIFIRLANDI!"))
@@ -824,16 +826,21 @@ def api_stok_verileri():
         deficit_analysis = {}
 
         for cinsi, kalinlik in VARYANTLAR:
-            key = f"{cinsi} {kalinlik}"
-            stok_data[f"{key} (Ham)"] = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-            stok_data[f"{key} (Sivali)"] = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+            key = f"{cinsi.strip().upper()} {kalinlik.strip().upper()}"
             
-            cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
+            # Stok map'ini temiz anahtarla kontrol et
+            stok_key = (cinsi.strip().upper(), kalinlik.strip().upper())
+            
+            stok_data[f"{key} (Ham)"] = stok_map.get(stok_key, {}).get('Ham', 0)
+            stok_data[f"{key} (Sivali)"] = stok_map.get(stok_key, {}).get('Sivali', 0)
+            
+            # SQL sorgusu temiz Cinsi ve Kalınlığı kullanmalı
+            cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (stok_key[0], stok_key[1]))
             bekleyen_m2_raw = cur.fetchone()
             
             gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
-            sivali_stok = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
-            ham_stok = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
+            sivali_stok = stok_map.get(stok_key, {}).get('Sivali', 0)
+            ham_stok = stok_map.get(stok_key, {}).get('Ham', 0)
             sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
             ham_eksik = max(0, sivali_eksik - ham_stok)
             
