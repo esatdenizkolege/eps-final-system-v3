@@ -418,18 +418,19 @@ def index():
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
-        # *** NİHAİ KRİTİK SQL DÜZELTMESİ: COALESCE ile NULL sonucunu 0'a zorla ***
+        # *** KRİTİK SORGULAMA DÜZELTMESİ (V4) ***
+        # PostgreSQL'e, hem kolonu hem de Python'dan gelen değişkeni aynı anda temizleyerek eşleşmeyi zorluyoruz.
         cur.execute(""" 
             SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
             FROM siparisler 
             WHERE durum='Bekliyor' 
-            AND TRIM(UPPER(cinsi)) = %s 
-            AND TRIM(UPPER(kalinlik)) = %s 
+            AND TRIM(UPPER(cinsi)) = TRIM(UPPER(%s)) 
+            AND TRIM(UPPER(kalinlik)) = TRIM(UPPER(%s)) 
         """, (cinsi, kalinlik))
         
         bekleyen_m2_raw = cur.fetchone()
         
-        # YENİ DÜZELTME: COALESCE kullanıldığı için sadece dictionary'den değeri alıyoruz.
+        # COALESCE kullanıldığı için güvenle değeri alıyoruz.
         gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
 
         # Eksik hesaplama mantığı
@@ -871,13 +872,13 @@ def api_stok_verileri():
             stok_data[f"{key} (Ham)"] = stok_map.get(stok_key, {}).get('Ham', 0)
             stok_data[f"{key} (Sivali)"] = stok_map.get(stok_key, {}).get('Sivali', 0)
             
-            # SQL sorgusu temiz Cinsi ve Kalınlığı kullanmalı
+            # *** KRİTİK SORGULAMA DÜZELTMESİ (V4) ***
             cur.execute(""" 
                 SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
                 FROM siparisler 
                 WHERE durum='Bekliyor' 
-                AND TRIM(UPPER(cinsi)) = %s 
-                AND TRIM(UPPER(kalinlik)) = %s 
+                AND TRIM(UPPER(cinsi)) = TRIM(UPPER(%s)) 
+                AND TRIM(UPPER(kalinlik)) = TRIM(UPPER(%s)) 
             """, (cinsi, kalinlik))
             
             bekleyen_m2_raw = cur.fetchone()
