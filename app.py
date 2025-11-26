@@ -631,29 +631,25 @@ def ayarla_kalinlik():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Yeni eklenen kalınlık veya cins için tüm kombinasyonları kontrol edip
-        # henüz veritabanında olmayanları ekliyoruz. 
-        # Yeni bir kalınlık geldiğinde (örn. 5 CM), tüm mevcut cinsler (BAROK, YATAY TAŞ...) için 
-        # 5 CM'lik stok satırları (Ham/Sıvalı) otomatik oluşur.
-        
+        # VARYANTLAR'ı güncel listelerle yeniden oluştur
         updated_cinsler = load_cinsler()
         updated_kalinliklar = load_kalinliklar()
         
-        # Tüm olası kombinasyonları döngüye al
-        new_variants = []
-        if yeni_cins == yeni_cins_input: # Yeni cins eklendiyse, sadece bu cinsin tüm kalınlıklarını ekle
-             for k in updated_kalinliklar:
-                 new_variants.append((yeni_cins, k))
+        # Yeni eklenen cins ve kalınlığı içeren TÜM kombinasyonları kontrol et
+        new_variants_to_add = set()
         
-        if yeni_kalinlik == yeni_kalinlik: # Yeni kalınlık eklendiyse, bu kalınlığın tüm mevcut cinslerini ekle
+        # Yeni kalınlık için mevcut/yeni tüm cinsleri ekle
+        if yeni_kalinlik in updated_kalinliklar:
              for c in updated_cinsler:
-                 new_variants.append((c, yeni_kalinlik))
-        
-        # Benzersiz kombinasyonları al
-        unique_new_variants = list(set(new_variants))
+                 new_variants_to_add.add((c, yeni_kalinlik))
+                 
+        # Yeni cins için mevcut/yeni tüm kalınlıkları ekle
+        if yeni_cins in updated_cinsler:
+             for k in updated_kalinliklar:
+                 new_variants_to_add.add((yeni_cins, k))
         
         # Veritabanına ekle
-        for c, k in unique_new_variants:
+        for c, k in new_variants_to_add:
              for asama in ['Ham', 'Sivali']:
                 cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
@@ -662,6 +658,11 @@ def ayarla_kalinlik():
                 """, (c, k, asama, 0))
         
         conn.commit()
+        
+        # Global değişkenleri yeniden yükle (init_db de çağrılıyor ama burada da çağırmak mantıklı)
+        global VARYANTLAR
+        VARYANTLAR = [(c, k) for c in updated_cinsler for k in updated_kalinliklar]
+        
         message = f"✅ Kombinasyon **{yeni_cins} {yeni_kalinlik}** başarıyla hazırlandı. ({cins_mesaji} / {kalinlik_mesaji})"
 
     except ValueError as e: 
