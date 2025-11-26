@@ -444,6 +444,31 @@ def index():
     # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
     return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP)
 
+# --- KRİTİK VERİ KURTARMA ROTASI (Diğer rotalarla aynı seviyede olmalı) ---
+@app.route('/admin/data_repair', methods=['GET'])
+def repair_data_integrity():
+    """Veritabanındaki cinsi ve kalinlik kolonlarındaki boşlukları ve küçük harfleri düzeltir."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # 1. STOK TABLOSUNU TEMİZLEME
+        cur.execute("UPDATE stok SET cinsi = TRIM(UPPER(cinsi)), kalinlik = TRIM(UPPER(kalinlik))")
+        
+        # 2. SİPARİŞ TABLOSUNU TEMİZLEME
+        cur.execute("UPDATE siparisler SET cinsi = TRIM(UPPER(cinsi)), kalinlik = TRIM(UPPER(kalinlik))")
+        
+        conn.commit()
+        return redirect(url_for('index', message="✅ KRİTİK VERİ KURTARMA BAŞARILI! Stok ve Sipariş Cinsi/Kalınlık verileri temizlendi. Şimdi siparişi tekrar deneyin."))
+        
+    except Exception as e:
+        if conn: conn.rollback()
+        return redirect(url_for('index', message=f"❌ Veri Kurtarma Hatası: {str(e)}"))
+    finally:
+        if conn: conn.close()
+# -----------------------------------------------------------------------------
+
 @app.route('/islem', methods=['POST'])
 def handle_stok_islem():
     """Stok hareketlerini yönetir."""
@@ -1112,6 +1137,7 @@ HTML_TEMPLATE = '''
             Mobil Görüntüleme Adresi: <a href="{{ url_for('mobil_gorunum') }}">/mobil</a>
             <span style="margin-left: 20px;">
                 <a href="{{ url_for('temizle_veritabani') }}" onclick="return confirm('UYARI: Tüm Stok ve Sipariş verileri kalıcı olarak SIFIRLANACAKTIR! Emin misiniz?')" style="color: red; font-weight: bold;">[VERİTABANINI TEMİZLE]</a>
+                <a href="{{ url_for('repair_data_integrity') }}" onclick="return confirm('UYARI: Veri kurtarma işlemi, mevcut tüm Cins/Kalınlık verilerini zorla temizleyip büyük harfe çevirir. Bu, eksik stok hatasını kesin çözmelidir. Emin misiniz?')" style="color: purple; font-weight: bold; margin-left: 15px;">[VERİ KURTARMA (ZORLA TEMİZLE)]</a>
             </span>
         </p>
         {% if message %}
