@@ -583,14 +583,14 @@ def handle_siparis_islem():
             cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
             
-        # YENİ EK: Siparişi Düzenleme
+        # DÜZELTİLDİ: Siparişi Düzenleme (Global bildirim kaldırıldı)
         elif action == 'duzenle_siparis':
             siparis_id = request.form['siparis_id']
             yeni_urun_kodu = request.form['yeni_urun_kodu']
             yeni_m2 = int(request.form['yeni_m2'])
             
             # Ürün kodundan cins/kalınlık tespiti
-            global CINS_TO_BOYALI_MAP # Sadece bu blokta global'e ihtiyacımız var (ürün kodundan çekme)
+            # Global değişkeni sadece okuduğumuz için 'global' bildirimine gerek yoktur.
             cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
             if not cins_kalinlik_key:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
