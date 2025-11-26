@@ -1,93 +1,93 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobil Stok & Sipariş Takip</title>
-    
-    <style>
-        /* --- GENEL STİL VE MOBİL İÇİN DÜZENLEME --- */
-        body { font-family: 'Inter', Arial, sans-serif; margin: 0; padding: 15px; background-color: #f8f9fa; color: #343a40; }
-        .container { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); }
-        h1 { color: #007bff; font-size: 1.8em; text-align: center; margin-bottom: 25px; border-bottom: 3px solid #007bff; padding-bottom: 8px; }
-        h3 { font-size: 1.1em; color: #5a5a5a; margin-top: 10px; margin-bottom: 5px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobil Stok & Sipariş Takip</title>
+    
+    <style>
+        /* --- GENEL STİL VE MOBİL İÇİN DÜZENLEME --- */
+        body { font-family: 'Inter', Arial, sans-serif; margin: 0; padding: 15px; background-color: #f8f9fa; color: #343a40; }
+        .container { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); }
+        h1 { color: #007bff; font-size: 1.8em; text-align: center; margin-bottom: 25px; border-bottom: 3px solid #007bff; padding-bottom: 8px; }
+        h3 { font-size: 1.1em; color: #5a5a5a; margin-top: 10px; margin-bottom: 5px; }
 
-        /* --- ACCORDION (Açılır/Kapanır) Stilleri --- */
-        .accordion-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-            background-color: #f0f8ff; /* Hafif mavi arka plan */
-            border: 1px solid #d0e8ff;
-            border-radius: 8px;
-            margin-top: 15px;
-            cursor: pointer;
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #007bff;
-            transition: background-color 0.3s;
-        }
-        .accordion-header:hover {
-            background-color: #e3f2ff;
-        }
-        .accordion-icon {
-            font-size: 1.5em;
-            transition: transform 0.3s;
-            line-height: 1; /* Dikey hizalama için */
-        }
-        .accordion-header.active .accordion-icon {
-            transform: rotate(180deg);
-        }
-        .accordion-content {
-            background-color: white;
-            padding: 0 15px;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.5s ease-in-out, padding 0.5s;
-            border-left: 1px solid #d0e8ff;
-            border-right: 1px solid #d0e8ff;
-        }
-        .accordion-content.open {
-            max-height: 5000px; /* Yeterince büyük bir değer */
-            padding: 15px;
-            border-bottom: 1px solid #d0e8ff;
-            border-radius: 0 0 8px 8px;
-        }
-        
-        /* Tablo Stilleri */
-        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); border-radius: 8px; overflow: hidden; font-size: 0.9em; }
-        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        th { background-color: #007bff; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
-        tr:last-child td { border-bottom: none; }
-        .count-cell { font-weight: bold; color: #212529; }
-        
-        /* Durum ve Defisit Renkleri */
-        .status-bekliyor { background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
-        .status-tamamlandi { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
-        .deficit-red { color: #dc3545; font-weight: bold; }
-        .production-blue { color: #007bff; font-style: italic; }
-        
-        /* Yükleme ve Hata Mesajları */
-        .loading, .error { text-align: center; padding: 20px; font-size: 1.1em; border-radius: 5px; }
-        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        /* --- ACCORDION (Açılır/Kapanır) Stilleri --- */
+        .accordion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background-color: #f0f8ff; /* Hafif mavi arka plan */
+            border: 1px solid #d0e8ff;
+            border-radius: 8px;
+            margin-top: 15px;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #007bff;
+            transition: background-color 0.3s;
+        }
+        .accordion-header:hover {
+            background-color: #e3f2ff;
+        }
+        .accordion-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s;
+            line-height: 1; /* Dikey hizalama için */
+        }
+        .accordion-header.active .accordion-icon {
+            transform: rotate(180deg);
+        }
+        .accordion-content {
+            background-color: white;
+            padding: 0 15px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, padding 0.5s;
+            border-left: 1px solid #d0e8ff;
+            border-right: 1px solid #d0e8ff;
+        }
+        .accordion-content.open {
+            max-height: 5000px; /* Yeterince büyük bir değer */
+            padding: 15px;
+            border-bottom: 1px solid #d0e8ff;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        /* Tablo Stilleri */
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); border-radius: 8px; overflow: hidden; font-size: 0.9em; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        th { background-color: #007bff; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+        tr:last-child td { border-bottom: none; }
+        .count-cell { font-weight: bold; color: #212529; }
+        
+        /* Durum ve Defisit Renkleri */
+        .status-bekliyor { background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
+        .status-tamamlandi { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
+        .deficit-red { color: #dc3545; font-weight: bold; }
+        .production-blue { color: #007bff; font-style: italic; }
+        
+        /* Yükleme ve Hata Mesajları */
+        .loading, .error { text-align: center; padding: 20px; font-size: 1.1em; border-radius: 5px; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
-        /* Planlama Kutusu */
-        .plan-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
-        .plan-box { padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; }
-        .plan-box h3 { border-bottom: 2px solid; padding-bottom: 5px; margin-bottom: 10px; }
-        .siva-plan { background-color: #e6f7ff; border-color: #007bff; }
-        .siva-plan h3 { border-bottom-color: #007bff; color: #007bff; }
-        .sevkiyat-plan { background-color: #fff8e6; border-color: #ffc107; }
-        .sevkiyat-plan h3 { border-bottom-color: #ffc107; color: #ffc107; }
-        
-        /* Plan Detay Listesi (Yeni) */
-        .plan-detail-list { list-style: none; padding: 0; margin: 5px 0 10px 0; }
-        .plan-detail-list li { 
-            font-size: 0.85em; 
-            padding: 3px 0; 
-            border-bottom: 1px dotted #ccc;
-        }
+        /* Planlama Kutusu */
+        .plan-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        .plan-box { padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; }
+        .plan-box h3 { border-bottom: 2px solid; padding-bottom: 5px; margin-bottom: 10px; }
+        .siva-plan { background-color: #e6f7ff; border-color: #007bff; }
+        .siva-plan h3 { border-bottom-color: #007bff; color: #007bff; }
+        .sevkiyat-plan { background-color: #fff8e6; border-color: #ffc107; }
+        .sevkiyat-plan h3 { border-bottom-color: #ffc107; color: #ffc107; }
+        
+        /* Plan Detay Listesi (Yeni) */
+        .plan-detail-list { list-style: none; padding: 0; margin: 5px 0 10px 0; }
+        .plan-detail-list li { 
+            font-size: 0.85em; 
+            padding: 3px 0; 
+            border-bottom: 1px dotted #ccc;
+        }
 
         /* --- SİPARİŞLER TABLO KAYDIRMA DÜZENLEMESİ (YENİ) --- */
         .table-responsive {
@@ -104,60 +104,57 @@
         #siparis-listesi th, #siparis-listesi td {
             white-space: nowrap; /* Hücre içeriğinin kaydırılmasını sağlar */
         }
-    </style>
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📱 Mobil Üretim Gözetim Paneli</h1>
-        
-        <button id="refreshButton" onclick="fetchData()" style="margin-bottom: 20px; background-color:#17a2b8; color: white; padding: 12px 15px; border: none; border-radius: 8px; width: 100%; font-size: 1.1em; cursor: pointer;">
-            🔄 Verileri Yenile
-        </button>
+    <div class="container">
+        <h1>📱 Mobil Üretim Gözetim Paneli</h1>
+        
+        <button id="refreshButton" onclick="fetchData()" style="margin-bottom: 20px; background-color:#17a2b8; color: white; padding: 12px 15px; border: none; border-radius: 8px; width: 100%; font-size: 1.1em; cursor: pointer;">
+            🔄 Verileri Yenile
+        </button>
 
-        <!-- ÜRETİM VE SEVKİYAT PLANI (Açılır/Kapanır) -->
-        <div id="plan-ozeti-header" class="accordion-header" onclick="toggleAccordion('plan-ozeti-content')">
-            <h2>🚀 Üretim ve Sevkiyat Planı</h2>
-            <span class="accordion-icon">▼</span>
-        </div>
-        <div id="plan-ozeti-content" class="accordion-content">
-            <div id="plan-ozeti">
-                <div class="loading">Planlama verileri çekiliyor...</div>
-            </div>
-        </div>
+        <div id="plan-ozeti-header" class="accordion-header" onclick="toggleAccordion('plan-ozeti-content')">
+            <h2>🚀 Üretim ve Sevkiyat Planı</h2>
+            <span class="accordion-icon">▼</span>
+        </div>
+        <div id="plan-ozeti-content" class="accordion-content">
+            <div id="plan-ozeti">
+                <div class="loading">Planlama verileri çekiliyor...</div>
+            </div>
+        </div>
 
-        <!-- STOK VE EKSİK ANALİZİ (Açılır/Kapanır) -->
-        <div id="stok-tablosu-header" class="accordion-header" onclick="toggleAccordion('stok-tablosu-content')">
-            <h2>📦 Stok ve Eksik Analizi (M²)</h2>
-            <span class="accordion-icon">▼</span>
-        </div>
-        <div id="stok-tablosu-content" class="accordion-content">
-            <p style="font-size: 0.8em; color: #666; margin-bottom: 15px;">*Gözetim amaçlıdır. Veri girişi PC arayüzünden yapılır.</p>
-            <div class="table-responsive">
-                <div id="stok-tablosu">
-                    <div class="loading">📦 Stok verileri çekiliyor...</div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- TÜM SİPARİŞLER (Açılır/Kapanır) -->
-        <div id="siparis-listesi-header" class="accordion-header" onclick="toggleAccordion('siparis-listesi-content')">
-            <h2>📋 Tüm Siparişler</h2>
-            <span class="accordion-icon">▼</span>
-        </div>
-        <div id="siparis-listesi-content" class="accordion-content">
-            <div class="table-responsive">
-                <div id="siparis-listesi">
-                    <div class="loading">📋 Sipariş verileri çekiliyor...</div>
-                </div>
-            </div>
-        </div>
+        <div id="stok-tablosu-header" class="accordion-header" onclick="toggleAccordion('stok-tablosu-content')">
+            <h2>📦 Stok ve Eksik Analizi (M²)</h2>
+            <span class="accordion-icon">▼</span>
+        </div>
+        <div id="stok-tablosu-content" class="accordion-content">
+            <p style="font-size: 0.8em; color: #666; margin-bottom: 15px;">*Gözetim amaçlıdır. Veri girişi PC arayüzünden yapılır.</p>
+            <div class="table-responsive">
+                <div id="stok-tablosu">
+                    <div class="loading">📦 Stok verileri çekiliyor...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="siparis-listesi-header" class="accordion-header" onclick="toggleAccordion('siparis-listesi-content')">
+            <h2>📋 Tüm Siparişler</h2>
+            <span class="accordion-icon">▼</span>
+        </div>
+        <div id="siparis-listesi-content" class="accordion-content">
+            <div class="table-responsive">
+                <div id="siparis-listesi">
+                    <div class="loading">📋 Sipariş verileri çekiliyor...</div>
+                </div>
+            </div>
+        </div>
 
-    </div>
-    
-    <script>
-        // API'ye erişim adresi (Bu URL'nin Render Public URL'nizle eşleştiğinden emin olun)
-        const API_URL = "https://eps-final-system-v3.onrender.com/api/stok";
-        const refreshButton = document.getElementById('refreshButton');
+    </div>
+    
+    <script>
+        // CRITICAL FIX: API URL'si güncellendi
+        const API_URL = "https://eps-final-system-v3-1.onrender.com/api/stok";
+        const refreshButton = document.getElementById('refreshButton');
         
         // İlk yüklemede Plan ve Stok analizini hemen aç
         document.addEventListener('DOMContentLoaded', () => {
@@ -173,260 +170,259 @@
                 toggleAccordion('stok-tablosu-content');
             }
         });
-        
-        // --- ACCORDION JS FONKSİYONU ---
-        function toggleAccordion(contentId) {
-            const content = document.getElementById(contentId);
-            const header = content.previousElementSibling; // Header, content'ten bir önceki elementtir
-            
-            // Toggle 'open' class on content and 'active' class on header
-            content.classList.toggle('open');
-            header.classList.toggle('active');
-        }
-        // --- ACCORDION JS FONKSİYONU SONU ---
+        
+        // --- ACCORDION JS FONKSİYONU ---
+        function toggleAccordion(contentId) {
+            const content = document.getElementById(contentId);
+            const header = content.previousElementSibling; // Header, content'ten bir önceki elementtir
+            
+            // Toggle 'open' class on content and 'active' class on header
+            content.classList.toggle('open');
+            header.classList.toggle('active');
+        }
+        // --- ACCORDION JS FONKSİYONU SONU ---
 
-        // Yardımcı Fonksiyon: Sayıları okunaklı hale getirir
-        function formatM2(m2) {
-            if (m2 === null || m2 === undefined) return '0';
-            // Sayıyı Türkiye formatında (binlik ayracı nokta) ve tam sayı olarak döndür
-            return parseFloat(m2).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
-        }
+        // Yardımcı Fonksiyon: Sayıları okunaklı hale getirir
+        function formatM2(m2) {
+            if (m2 === null || m2 === undefined) return '0';
+            // Sayıyı Türkiye formatında (binlik ayracı nokta) ve tam sayı olarak döndür
+            return parseFloat(m2).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+        }
 
-        async function fetchData() {
-            // --- Butonu Kitleme ve Yükleme Mesajları ---
-            refreshButton.disabled = true;
-            refreshButton.textContent = '⏳ Veriler Yükleniyor...';
+        async function fetchData() {
+            // --- Butonu Kitleme ve Yükleme Mesajları ---
+            refreshButton.disabled = true;
+            refreshButton.textContent = '⏳ Veriler Yükleniyor...';
 
-            // Yükleme mesajlarını göster
-            document.getElementById('plan-ozeti').innerHTML = '<div class="loading">Planlama verileri çekiliyor...</div>';
-            document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
-            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
-            
-            let success = false;
-            
-            try {
-                const response = await fetch(API_URL);
-                
-                if (!response.ok) {
-                    throw new Error(`API erişim hatası: HTTP ${response.status}`);
-                }
-                const data = await response.json();
-                
-                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
-                renderStok(data.stok, data.deficit_analysis); 
-                renderSiparisler(data.siparisler); 
-                success = true;
-                
-            } catch (error) {
-                console.error("Fetch Error:", error); 
-                // Hata durumunda sadece ilk accordion'ı açıp hata mesajını göster
-                document.getElementById('plan-ozeti').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor veya veri formatı hatalı. (${error.message})</div>`;
-                document.getElementById('stok-tablosu').innerHTML = '';
-                document.getElementById('siparis-listesi').innerHTML = '';
-                // Hata anında tümü görünür olmasın, sadece hata mesajı görünsün
-            } finally {
-                // --- Butonu Serbest Bırakma ---
-                refreshButton.disabled = false;
-                refreshButton.textContent = success ? '✅ Veriler Güncellendi' : '🔄 Verileri Yenile (Hata)';
-                setTimeout(() => { 
-                    if (refreshButton.textContent.includes('Güncellendi')) {
-                        refreshButton.textContent = '🔄 Verileri Yenile';
-                    }
-                }, 3000); // Başarılı mesajını 3 saniye sonra kaldır.
-            }
-        }
+            // Yükleme mesajlarını göster
+            document.getElementById('plan-ozeti').innerHTML = '<div class="loading">Planlama verileri çekiliyor...</div>';
+            document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
+            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
+            
+            let success = false;
+            
+            try {
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    // API'den gelen detaylı hata mesajını yakalamaya çalış
+                    const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen Hata', detail: `HTTP ${response.status}` }));
+                    throw new Error(`API erişim hatası: HTTP ${response.status}. Detay: ${errorData.detail || 'Sunucu detay vermedi.'}`);
+                }
+                const data = await response.json();
+                
+                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
+                renderStok(data.stok, data.deficit_analysis); 
+                renderSiparisler(data.siparisler); 
+                success = true;
+                
+            } catch (error) {
+                console.error("Fetch Error:", error); 
+                // Hata durumunda sadece ilk accordion'ı açıp hata mesajını göster
+                document.getElementById('plan-ozeti').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor veya veri formatı hatalı. (${error.message})</div>`;
+                document.getElementById('stok-tablosu').innerHTML = '<div class="error">API Bağlantı Hatası</div>';
+                document.getElementById('siparis-listesi').innerHTML = '<div class="error">API Bağlantı Hatası</div>';
+            } finally {
+                // --- Butonu Serbest Bırakma ---
+                refreshButton.disabled = false;
+                refreshButton.textContent = success ? '✅ Veriler Güncellendi' : '🔄 Verileri Yenile (Hata)';
+                setTimeout(() => { 
+                    if (refreshButton.textContent.includes('Güncellendi')) {
+                        refreshButton.textContent = '🔄 Verileri Yenile';
+                    }
+                }, 3000); // Başarılı mesajını 3 saniye sonra kaldır.
+            }
+        }
 
-        // Yeni Planlama Render Fonksiyonu (Detaylı Sıva Planı Desteği)
-        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
-            
-            let html = `
-                <div style="margin-bottom: 10px; margin-top: 10px;">
-                    <p style="font-weight: bold; font-size: 1.1em; color: #007bff; margin-bottom: 5px;">
-                        Kapasite: ${formatM2(kapasite)} m²/gün
-                    </p>`;
+        // Yeni Planlama Render Fonksiyonu (Detaylı Sıva Planı Desteği)
+        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
+            
+            let html = `
+                <div style="margin-bottom: 10px; margin-top: 10px;">
+                    <p style="font-weight: bold; font-size: 1.1em; color: #007bff; margin-bottom: 5px;">
+                        Kapasite: ${formatM2(kapasite)} m²/gün
+                    </p>`;
 
-            if (toplam_eksi_m2 > 0) {
-                html += `<p style="font-weight: bold; color: darkred; font-size: 0.9em;">
-                            Toplam Sıva M² Eksiği: ${formatM2(toplam_eksi_m2)} m²
-                        </p>`;
-            } else {
-                   html += `<p style="font-weight: bold; color: green; font-size: 0.9em;">
-                            Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.
-                        </p>`;
-            }
-            html += `</div>`;
-            
-            html += `
-            <div class="plan-grid">
-                <div class="plan-box siva-plan">
-                    <h3>🧱 Sıva Üretim Planı (5 Gün)</h3>`;
-                    
-                    const sivaKeys = Object.keys(sivaPlan).sort((a, b) => parseInt(a) - parseInt(b));
-                    
-                    if (sivaKeys.length > 0) {
-                        sivaKeys.forEach(gun => {
-                            // Hata Düzeltme: sivaPlan[gun] değerinin bir dizi olduğunu varsayıyoruz.
-                            const gunlukUretim = Array.isArray(sivaPlan[gun]) ? sivaPlan[gun] : Object.values(sivaPlan[gun]);
+            if (toplam_eksi_m2 > 0) {
+                html += `<p style="font-weight: bold; color: darkred; font-size: 0.9em;">
+                            Toplam Sıva M² Eksiği: ${formatM2(toplam_eksi_m2)} m²
+                        </p>`;
+            } else {
+                        html += `<p style="font-weight: bold; color: green; font-size: 0.9em;">
+                            Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.
+                        </p>`;
+            }
+            html += `</div>`;
+            
+            html += `
+            <div class="plan-grid">
+                <div class="plan-box siva-plan">
+                    <h3>🧱 Sıva Üretim Planı (5 Gün)</h3>`;
+                    
+                    const sivaKeys = Object.keys(sivaPlan).sort((a, b) => parseInt(a) - parseInt(b));
+                    
+                    if (sivaKeys.length > 0) {
+                        sivaKeys.forEach(gun => {
+                            const gunlukUretim = Array.isArray(sivaPlan[gun]) ? sivaPlan[gun] : Object.values(sivaPlan[gun]);
 
-                            // reduce fonksiyonunu sadece 'gunlukUretim' bir dizi ise çağırabiliriz.
-                            const toplamM2 = gunlukUretim.reduce((sum, item) => sum + item.m2, 0);
+                            const toplamM2 = gunlukUretim.reduce((sum, item) => sum + item.m2, 0);
 
-                            html += `<h4 style="margin: 8px 0 2px 0; color: #0056b3;">
-                                        Gün ${gun} - Toplam: ${formatM2(toplamM2)} m²
-                                    </h4>
-                                    <ul class="plan-detail-list">`;
-                                
-                                gunlukUretim.forEach(item => {
-                                    // SIVA PLANINDA HANGI CİNSE NE KADAR SIVA ATILACAĞI GÖSTERİLİYOR
-                                    html += `<li>${item.cinsi}: <b>${formatM2(item.m2)} m²</b></li>`; 
-                                });
+                            html += `<h4 style="margin: 8px 0 2px 0; color: #0056b3;">
+                                        Gün ${gun} - Toplam: ${formatM2(toplamM2)} m²
+                                    </h4>
+                                    <ul class="plan-detail-list">`;
+                                
+                                gunlukUretim.forEach(item => {
+                                    // SIVA PLANINDA HANGI CİNSE NE KADAR SIVA ATILACAĞI GÖSTERİLİYOR
+                                    html += `<li>${item.cinsi}: <b>${formatM2(item.m2)} m²</b></li>`; 
+                                });
 
-                            html += `</ul>`;
-                        });
-                    } else {
-                        html += `<p style="font-size: 0.9em; color: green; font-weight: 500;">Önümüzdeki 5 gün için Sıva ihtiyacı yok.</p>`;
-                    }
-                    html += `
-                </div>
+                            html += `</ul>`;
+                        });
+                    } else {
+                        html += `<p style="font-size: 0.9em; color: green; font-weight: 500;">Önümüzdeki 5 gün için Sıva ihtiyacı yok.</p>`;
+                    }
+                    html += `
+                </div>
 
-                <div class="plan-box sevkiyat-plan">
-                    <h3>🚚 Sevkiyat Planı (5 Gün)</h3>`;
-                    const sevkiyatKeys = Object.keys(sevkiyatPlan).sort();
-                    
-                    if (sevkiyatKeys.length > 0) {
-                        sevkiyatKeys.forEach(tarih => {
-                            // Hata Düzeltme: sevkiyatlar listesinin de güvenli bir şekilde dizi olduğundan emin olalım.
-                            const sevkiyatlar = Array.isArray(sevkiyatPlan[tarih]) ? sevkiyatPlan[tarih] : Object.values(sevkiyatPlan[tarih]);
-                            const toplamM2 = sevkiyatlar.reduce((sum, s) => sum + s.bekleyen_m2, 0);
+                <div class="plan-box sevkiyat-plan">
+                    <h3>🚚 Sevkiyat Planı (5 Gün)</h3>`;
+                    const sevkiyatKeys = Object.keys(sevkiyatPlan).sort();
+                    
+                    if (sevkiyatKeys.length > 0) {
+                        sevkiyatKeys.forEach(tarih => {
+                            const sevkiyatlar = Array.isArray(sevkiyatPlan[tarih]) ? sevkiyatPlan[tarih] : Object.values(sevkiyatPlan[tarih]);
+                            const toplamM2 = sevkiyatlar.reduce((sum, s) => sum + s.bekleyen_m2, 0);
 
-                            html += `
-                                <h4 style="margin: 8px 0 2px 0; color: #cc8400;">
-                                        ${tarih} (${formatM2(toplamM2)} m²)
-                                    </h4>
-                                <ul class="plan-detail-list">`;
-                                    sevkiyatlar.forEach(s => {
-                                        html += `<li>- ${s.urun_kodu} / ${s.musteri}: <b>${formatM2(s.bekleyen_m2)} m²</b></li>`;
-                                    });
-                            html += `</ul>`;
-                        });
-                    } else {
-                        html += `<p style="font-size: 0.9em; font-weight: 500;">Önümüzdeki 5 gün terminli sevkiyat yok.</p>`;
-                    }
+                            html += `
+                                <h4 style="margin: 8px 0 2px 0; color: #cc8400;">
+                                        ${tarih} (${formatM2(toplamM2)} m²)
+                                    </h4>
+                                    <ul class="plan-detail-list">`;
+                                    sevkiyatlar.forEach(s => {
+                                        html += `<li>- ${s.urun_kodu} / ${s.musteri}: <b>${formatM2(s.bekleyen_m2)} m²</b></li>`;
+                                    });
+                            html += `</ul>`;
+                        });
+                    } else {
+                        html += `<p style="font-size: 0.9em; font-weight: 500;">Önümüzdeki 5 gün terminli sevkiyat yok.</p>`;
+                    }
 
-                    html += `
-                </div>
-            </div>`;
+                    html += `
+                </div>
+            </div>`;
 
-            document.getElementById('plan-ozeti').innerHTML = html;
-        }
+            document.getElementById('plan-ozeti').innerHTML = html;
+        }
 
 
-        function renderStok(stokData, deficitAnalysis) {
-            // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
-            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Sıvalı Eksik</th><th>Ham Eksik</th></tr>';
-            
-            // Sıralanmış anahtarlar
-            const sortedKeys = Object.keys(stokData).sort((a, b) => {
-                const [cinsiA, kalinlikA, asamaA] = a.split(/ \((.*)\)/);
-                const [cinsiB, kalinlikB, asamaB] = b.split(/ \((.*)\)/);
-                
-                if (cinsiA !== cinsiB) return cinsiA.localeCompare(cinsiB);
-                if (kalinlikA !== kalinlikB) return kalinlikA.localeCompare(kalinlikB);
-                
-                const orderMap = {'Ham': 0, 'Sivali': 1};
-                return orderMap[asamaA.trim()] - orderMap[asamaB.trim()];
-            });
-            
-            sortedKeys.forEach(key => {
-                const value = stokData[key];
-                
-                const itemKey = key.substring(0, key.lastIndexOf(' (')); 
-                const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
-                const deficitInfo = deficitAnalysis[itemKey]; 
-                
-                let sivaliDeficitText = '-';
-                let hamDeficitText = '-';
-                let sivaliDeficit = 0;
-                let hamDeficit = 0;
-                let hamCoverage = 0;
+        function renderStok(stokData, deficitAnalysis) {
+            // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
+            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Sıvalı Eksik</th><th>Ham Eksik</th></tr>';
+            
+            // Sıralanmış anahtarlar
+            const sortedKeys = Object.keys(stokData).sort((a, b) => {
+                // Parantez içindeki kısmı ayırarak sıralama yapar
+                const [cinsiA, asamaA] = [a.substring(0, a.lastIndexOf(' (')).trim(), a.substring(a.lastIndexOf('(') + 1, a.lastIndexOf(')').trim())];
+                const [cinsiB, asamaB] = [b.substring(0, b.lastIndexOf(' (')).trim(), b.substring(b.lastIndexOf('(') + 1, b.lastIndexOf(')').trim())];
+                
+                if (cinsiA !== cinsiB) return cinsiA.localeCompare(cinsiB);
+                
+                const orderMap = {'Ham': 0, 'Sivali': 1};
+                return orderMap[asamaA] - orderMap[asamaB];
+            });
+            
+            sortedKeys.forEach(key => {
+                const value = stokData[key];
+                
+                // Key'i "BAROK 2 CM (Ham)" formatından "BAROK 2 CM" formatına çevirir
+                const itemKey = key.substring(0, key.lastIndexOf(' (')).trim(); 
+                const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
+                const deficitInfo = deficitAnalysis[itemKey]; 
+                
+                let sivaliDeficitText = '-';
+                let hamDeficitText = '-';
+                let sivaliDeficit = 0;
+                let hamDeficit = 0;
+                let hamCoverage = 0;
 
-                // Defisit Değerlerini Hesapla/Al
-                if (deficitInfo) {
-                    sivaliDeficit = deficitInfo.sivali_deficit || 0;
-                    hamDeficit = deficitInfo.ham_deficit || 0;
-                    hamCoverage = deficitInfo.ham_coverage || 0;
-                }
-                
-                // SIVALI Satırı
-                if (asama === 'Sivali') {
-                    if (sivaliDeficit > 0) {
-                        sivaliDeficitText = `<span class="deficit-red">${formatM2(sivaliDeficit)} m² EKSİK</span>`;
-                    }
-                } 
-                
-                // HAM Satırı
-                if (asama === 'Ham') {
-                    if (hamDeficit > 0) {
-                        hamDeficitText = `<span class="deficit-red">${formatM2(hamDeficit)} m² EKSİK</span>`;
-                    } 
-                    if (hamCoverage > 0) {
-                           sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${formatM2(hamCoverage)} m²)</span>`;
-                    }
-                }
+                // Defisit Değerlerini Hesapla/Al
+                if (deficitInfo) {
+                    sivaliDeficit = deficitInfo.sivali_deficit || 0;
+                    hamDeficit = deficitInfo.ham_deficit || 0;
+                    hamCoverage = deficitInfo.ham_coverage || 0;
+                }
+                
+                // SIVALI Satırı
+                if (asama === 'Sivali') {
+                    if (sivaliDeficit > 0) {
+                        sivaliDeficitText = `<span class="deficit-red">${formatM2(sivaliDeficit)} m² EKSİK</span>`;
+                    }
+                } 
+                
+                // HAM Satırı
+                if (asama === 'Ham') {
+                    if (hamDeficit > 0) {
+                        hamDeficitText = `<span class="deficit-red">${formatM2(hamDeficit)} m² EKSİK</span>`;
+                    } 
+                    if (hamCoverage > 0) {
+                            sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${formatM2(hamCoverage)} m²)</span>`;
+                    }
+                }
 
-                // Sıfır Stokları Gizleme Mantığı (Sadece Pozitif/Negatif stok veya eksik sipariş varsa göster)
-                if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
-                    html += `<tr>
-                        <td>${key}</td>
-                        <td class="count-cell">${formatM2(value)} m²</td>
-                        <td>${sivaliDeficitText}</td>
-                        <td>${hamDeficitText}</td>
-                    </tr>`;
-                }
-            });
+                // Sıfır Stokları Gizleme Mantığı (Sadece Pozitif/Negatif stok veya eksik sipariş varsa göster)
+                if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
+                    html += `<tr>
+                        <td>${key.replace(` (${asama})`, '')}</td>
+                        <td class="count-cell">${formatM2(value)} m²</td>
+                        <td>${sivaliDeficitText}</td>
+                        <td>${hamDeficitText}</td>
+                    </tr>`;
+                }
+            });
 
-            html += '</table>';
-            document.getElementById('stok-tablosu').innerHTML = html;
-        }
+            html += '</table>';
+            document.getElementById('stok-tablosu').innerHTML = html;
+        }
 
-        function renderSiparisler(siparisler) {
-            const tumSiparisler = siparisler; 
-            
-            // Başlıklar: Sip. Tarihi, Müşteri, Ürün, M², Durum, Termin, Sıvalı Zemin (Gün)
-            let html = '<table><tr><th>Sip. Tarihi</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th><th>Termin</th><th>Zemin (Gün)</th></tr>';
+        function renderSiparisler(siparisler) {
+            const tumSiparisler = siparisler; 
+            
+            // Başlıklar: Sip. Tarihi, Müşteri, Ürün, M², Durum, Termin, Sıvalı Zemin (Gün)
+            let html = '<table><tr><th>Sip. Tarihi</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th><th>Termin</th><th>Zemin (Gün)</th></tr>';
 
-            if (tumSiparisler.length === 0) {
-                html += '<tr><td colspan="7" style="text-align:center; color:#666; font-weight:bold; padding: 20px;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
-            } else {
-                tumSiparisler.forEach(s => {
-                    let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
-                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${formatM2(s.bekleyen_m2)} m²` : '0 m²';
-                    
-                    let planlananGunText = '-';
-                    if (s.durum === 'Bekliyor') {
-                        if (s.planlanan_is_gunu === 0) {
-                            planlananGunText = `<span style="color: green;">Stoktan (0)</span>`;
-                        } else if (s.planlanan_is_gunu > 0) {
-                            planlananGunText = `<b>${s.planlanan_is_gunu} Gün</b>`;
-                        } else {
-                            planlananGunText = `Kapasite Yok`;
-                        }
-                    }
-                    
-                    html += `<tr>
-                        <td>${s.siparis_tarihi}</td>
-                        <td>${s.musteri}</td>
-                        <td>${s.urun_kodu}</td>
-                        <td class="count-cell">${bekleyenM2}</td>
-                        <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
-                        <td>${s.termin_tarihi}</td>
-                        <td>${planlananGunText}</td>
-                    </tr>`;
-                });
-            }
-            html += '</table>';
-            document.getElementById('siparis-listesi').innerHTML = html;
-        }
-    </script>
+            if (tumSiparisler.length === 0) {
+                html += '<tr><td colspan="7" style="text-align:center; color:#666; font-weight:bold; padding: 20px;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
+            } else {
+                tumSiparisler.forEach(s => {
+                    let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
+                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${formatM2(s.bekleyen_m2)} m²` : '0 m²';
+                    
+                    let planlananGunText = '-';
+                    if (s.durum === 'Bekliyor') {
+                        if (s.planlanan_is_gunu === 0) {
+                            planlananGunText = `<span style="color: green;">Stoktan (0)</span>`;
+                        } else if (s.planlanan_is_gunu > 0) {
+                            planlananGunText = `<b>${s.planlanan_is_gunu} Gün</b>`;
+                        } else {
+                            planlananGunText = `Kapasite Yok`;
+                        }
+                    }
+                    
+                    html += `<tr>
+                        <td>${s.siparis_tarihi}</td>
+                        <td>${s.musteri}</td>
+                        <td>${s.urun_kodu}</td>
+                        <td class="count-cell">${bekleyenM2}</td>
+                        <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
+                        <td>${s.termin_tarihi}</td>
+                        <td>${planlananGunText}</td>
+                    </tr>`;
+                });
+            }
+            html += '</table>';
+            document.getElementById('siparis-listesi').innerHTML = html;
+        }
+    </script>
 </body>
 </html>
