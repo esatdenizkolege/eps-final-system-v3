@@ -227,9 +227,11 @@ def calculate_planning(conn):
         cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
         stok_raw = cur.fetchall()
         
-        # Stokları ham ve sıvalı olarak map'le (Tuple key: (cinsi, kalinlik))
+        # KRİTİK DÜZELTME: Stokları ham ve sıvalı olarak map'le (Tuple key: (cinsi, kalinlik))
+        # Veritabanından gelen stringleri temizle (.strip())
         for row in stok_raw:
-            key = (row['cinsi'], row['kalinlik'])
+            # Temizlenmiş (strip edilmiş) anahtar kullanılıyor
+            key = (row['cinsi'].strip(), row['kalinlik'].strip())
             if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
             stok_map[key][row['asama']] = row['m2']
 
@@ -249,6 +251,8 @@ def calculate_planning(conn):
         temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
         
         for siparis in bekleyen_siparisler:
+            # Siparişlerdeki cinsi/kalinlik da temizleniyor olmalı, ancak zaten 
+            # siparişler Flask tarafından temiz stringlerle kaydediliyor.
             key = (siparis['cinsi'], siparis['kalinlik'])
             stok_sivali_available = temp_stok_sivali.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
@@ -360,9 +364,11 @@ def index():
     stok_list = []
     for cinsi, kalinlik in VARYANTLAR:
         key = (cinsi, kalinlik)
+        # Stok map'i temizlenmiş anahtarlarla tutulduğu için burada sorunsuz alınabilir.
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
+        # SQL sorgusunda temiz Python değişkenleri kullanılıyor.
         cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
         bekleyen_m2_raw = cur.fetchone()
         
