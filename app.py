@@ -4,7 +4,6 @@ from flask import Flask, render_template_string, request, redirect, url_for, jso
 # SQLite yerine PostgreSQL'e bağlanmak için psycopg2 kütüphanesini kullanıyoruz.
 import psycopg2 
 # Sorgu sonuçlarını sözlük (dict) olarak almak için
-# Hata almamak için RealDictCursor'ı bağlantı sırasında kullanacağız.
 from psycopg2.extras import RealDictCursor 
 import json
 from datetime import datetime, timedelta
@@ -20,11 +19,9 @@ app = Flask(__name__)
 CORS(app) 
 
 # PostgreSQL bağlantı URL'sini ortam değişkeninden oku. 
-# Bu değişken Render'daki Web Service ayarlarında tanımlandı (DATABASE_URL).
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# JSON dosyaları hala yerel diskte tutuluyor, bu dosyalar (kapasite, ürün kodları) sık değişiyorsa,
-# bunların da veritabanına taşınması daha kalıcı bir çözüm olur.
+# JSON dosyaları hala yerel diskte tutuluyor.
 KAPASITE_FILE = 'kapasite.json' 
 # Önbellekleme (caching) sorunlarını azaltmak için ayar.
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 
@@ -34,7 +31,7 @@ KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
 CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
 
-# --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ (JSON dosyaları hala yerel diskte tutuluyor) ---
+# --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ ---
 
 def load_data(filename):
     """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
@@ -80,8 +77,6 @@ def get_db_connection():
     """PostgreSQL veritabanı bağlantısını açar."""
     # DATABASE_URL ortam değişkeni olmadan Render'da çalışmayacaktır.
     if not DATABASE_URL:
-        # Uygulama, Render'da DATABASE_URL olmadan başlamamalıdır.
-        # Yerel deneme için yerel bir PostgreSQL bağlantısı kullanılabilir.
         raise Exception("DATABASE_URL ortam değişkeni Render'da tanımlı değil. Bağlantı kurulamıyor.")
     
     # RealDictCursor, bağlantıdan oluşturulan tüm imleçlerin sözlük (dict) döndürmesini sağlar.
@@ -92,13 +87,9 @@ def get_db_connection():
 def init_db():
     """Veritabanını ve tabloları oluşturur."""
     try:
-        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # PostgreSQL tablosu oluşturma (SQLite'tan farklı syntax)
-        # SERIAL PRIMARY KEY: Otomatik artan ID
-        # UNIQUE(cinsi, kalinlik, asama): Stok tablosundaki benzersizliği sağlar
         cur.execute(""" 
             CREATE TABLE IF NOT EXISTS stok ( 
                 id SERIAL PRIMARY KEY, 
@@ -128,7 +119,6 @@ def init_db():
         # Varsayılan stok girişleri (EĞER YOKSA ekle)
         for c, k in VARYANTLAR:
             for asama in ['Ham', 'Sivali']:
-                # INSERT INTO ... ON CONFLICT DO NOTHING ile INSERT OR IGNORE mantığı sağlanır.
                 cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
                     VALUES (%s, %s, %s, %s) 
@@ -139,16 +129,11 @@ def init_db():
         cur.close()
         conn.close()
     except Exception as e:
-        # Hata durumunda konsola yaz
         print(f"Veritabanı Başlatma Hatası: {e}")
-        # Bu hata genellikle DATABASE_URL'nin yanlış olduğu anlamına gelir.
-        # Uygulamanın başlatılmasını engellemek için exit(1) eklenebilir.
 
 with app.app_context():
-    # PostgreSQL tablosu başlatma
     init_db()
     
-    # JSON dosyalarını başlatma (JSON'lar hala geçici diskte tutulacaktır)
     if not os.path.exists(KAPASITE_FILE):
         save_data({"gunluk_siva_m2": 600}, KAPASITE_FILE)
     if not os.path.exists('urun_kodlari.json'):
@@ -162,7 +147,6 @@ def get_next_siparis_kodu(conn):
     cur = conn.cursor()
     current_year = datetime.now().strftime('%Y')
     
-    # PostgreSQL'de sipariş kodunu çekme
     cur.execute(f""" 
         SELECT siparis_kodu 
         FROM siparisler 
@@ -173,7 +157,6 @@ def get_next_siparis_kodu(conn):
     last_code_row = cur.fetchone()
     
     if last_code_row:
-        # RealDictCursor kullanıldığı için sözlükten çekilir
         last_code = last_code_row['siparis_kodu'] 
         try:
             last_number = int(last_code.split('-')[-1])
@@ -235,7 +218,6 @@ def calculate_planning(conn):
 
         # Hesaplanan iş günlerini veritabanına kaydet
         for siparis_id, is_gunu in planlama_sonuclari.items():
-            # PostgreSQL'de UPDATE sorgusu
             cur.execute("UPDATE siparisler SET planlanan_is_gunu = %s WHERE id = %s", (is_gunu, siparis_id))
         conn.commit()
         
@@ -273,7 +255,6 @@ def calculate_planning(conn):
         sevkiyat_plan_detay = defaultdict(list)
         for i in range(0, 5): 
             plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
-            # PostgreSQL'de SELECT sorgusu
             cur.execute("""
                 SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
                 FROM siparisler 
@@ -283,7 +264,6 @@ def calculate_planning(conn):
             sevkiyatlar = cur.fetchall()
             
             if sevkiyatlar:
-                # RealDictCursor zaten sözlük listesi döndürür
                 sevkiyat_plan_detay[plan_tarihi] = sevkiyatlar
         
         cur.close()
@@ -301,12 +281,11 @@ def calculate_planning(conn):
 @app.route('/', methods=['GET'])
 def index():
     """Ana PC arayüzünü (veri giriş ve kapsamlı tablolar) gösterir."""
-    # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
     conn = get_db_connection() 
     cur = conn.cursor()
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
-    # calculate_planning'de hata yakalama var, burada hata olursa Render loguna düşer
+    # calculate_planning'de hata olursa loga düşer
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
     stok_list = []
@@ -314,7 +293,6 @@ def index():
         ham_m2 = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
         sivali_m2 = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
         
-        # PostgreSQL'de SUM sorgusu
         cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
         bekleyen_m2_raw = cur.fetchone()
         
@@ -324,7 +302,6 @@ def index():
         stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
     
     cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
-    # Tarih formatı dönüşümü burada gerekli değil, çünkü Jinja2 bunu hallediyor.
     siparisler = cur.fetchall() 
     next_siparis_kodu = get_next_siparis_kodu(conn)
     today = datetime.now().strftime('%Y-%m-%d')
@@ -345,11 +322,9 @@ def handle_stok_islem():
     message = ""
     success = True
     try:
-        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
         conn = get_db_connection() 
         cur = conn.cursor()
 
-        # SQL sorgularını %s parametreleriyle değiştirildi
         if action == 'ham_alim': 
             cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
             message = f"✅ {cinsi} {kalinlik} Ham stoğuna {m2} m² eklendi."
@@ -420,12 +395,11 @@ def handle_stok_islem():
 
 @app.route('/siparis', methods=['POST'])
 def handle_siparis_islem():
-    """Sipariş ekler, tamamlar veya iptal eder."""
+    """Sipariş ekler, düzenler, siler veya tamamlar."""
     action = request.form['action']
     conn = None
     message = ""
     try:
-        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
         conn = get_db_connection()
         cur = conn.cursor()
         
@@ -439,22 +413,38 @@ def handle_siparis_islem():
             termin_tarihi = request.form['termin_tarihi']
             m2 = int(request.form['m2'])
             
-            # PostgreSQL'de INSERT sorgusu
             cur.execute(""" INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, bekleyen_m2, durum, planlanan_is_gunu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """, (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, m2, 'Bekliyor', 0))
             
             conn.commit(); message = f"✅ Sipariş {siparis_kodu} ({urun_kodu}) {m2} m² olarak {musteri} adına eklendi."
             
         elif action == 'tamamla_siparis':
             siparis_id = request.form['siparis_id']
-            # PostgreSQL'de UPDATE sorgusu
             cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
             
-        elif action == 'iptal_siparis':
+        # YENİ EK: Siparişi Düzenleme
+        elif action == 'duzenle_siparis':
             siparis_id = request.form['siparis_id']
-            # PostgreSQL'de UPDATE sorgusu
-            cur.execute("UPDATE siparisler SET durum = 'Iptal', bekleyen_m2 = 0, planlanan_is_gunu = -1 WHERE id = %s", (siparis_id,))
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} iptal edildi olarak işaretlendi."
+            yeni_urun_kodu = request.form['yeni_urun_kodu']
+            yeni_cinsi = request.form['yeni_cinsi']
+            yeni_kalinlik = request.form['yeni_kalinlik']
+            yeni_m2 = int(request.form['yeni_m2'])
+            
+            cur.execute("""
+                UPDATE siparisler SET 
+                urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s 
+                WHERE id = %s AND durum = 'Bekliyor'
+            """, (yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, siparis_id))
+            
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m²."
+
+        # YENİ EK: Siparişi Kalıcı Silme (İz bırakmaz)
+        elif action == 'sil_siparis':
+            siparis_id = request.form['siparis_id']
+            cur.execute("DELETE FROM siparisler WHERE id = %s", (siparis_id,))
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} veritabanından **kalıcı olarak silindi**."
+        
+        # Kaldırılan 'iptal_siparis' bloğu
             
         cur.close()
     except psycopg2.IntegrityError: 
@@ -470,7 +460,6 @@ def handle_siparis_islem():
 @app.route('/ayarla/kapasite', methods=['POST'])
 def ayarla_kapasite():
     """Günlük sıva kapasitesini ayarlar."""
-    # JSON dosya tabanlı olduğu için değişiklik yapılmadı.
     try:
         kapasite_m2 = int(request.form['kapasite_m2'])
         if kapasite_m2 <= 0: raise ValueError("Kapasite pozitif bir sayı olmalıdır.")
@@ -483,7 +472,6 @@ def ayarla_kapasite():
 @app.route('/ayarla/urun_kodu', methods=['POST'])
 def ayarla_urun_kodu():
     """Yeni bir ürün kodu ekler."""
-    # JSON dosya tabanlı olduğu için değişiklik yapılmadı.
     yeni_kod = request.form['yeni_urun_kodu'].strip().upper()
     cins_kalinlik_key = request.form['cinsi']
     urun_kodlari_map = load_data('urun_kodlari.json')
@@ -507,12 +495,9 @@ def api_stok_verileri():
     """Mobil görünüm için stok, sipariş ve planlama verilerini JSON olarak döndürür."""
     conn = None
     try: # Hata yakalamayı başlat
-        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Tüm analiz ve planlama verilerini hesaplar (PostgreSQL bağlantısı ile)
-        # calculate_planning içinde hata yakalama mevcut.
         toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
         
         stok_data = {}
@@ -523,7 +508,6 @@ def api_stok_verileri():
             stok_data[f"{key} (Ham)"] = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
             stok_data[f"{key} (Sivali)"] = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
             
-            # PostgreSQL'de SUM sorgusu
             cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
             bekleyen_m2_raw = cur.fetchone()
             
@@ -546,8 +530,7 @@ def api_stok_verileri():
         # Tarih alanlarını JSON uyumlu string'e çevir (KRİTİK DÜZELTME)
         siparis_listesi = []
         for s in siparisler:
-            s_dict = dict(s) # RealDictCursor sonucunu normal dict'e çevir
-            # datetime.date nesnelerini string'e çevir
+            s_dict = dict(s) 
             if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
                 s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
             if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
@@ -584,12 +567,10 @@ def mobil_gorunum():
     Telefonlar için tasarlanmış, veri girişi içermeyen 
     stok_goruntule.html şablonunu templates/ klasöründen sunar.
     """
-    # templates/stok_goruntule.html dosyasını yükler
     return render_template('stok_goruntule.html')
 
 
 # --- HTML ŞABLONU (PC Arayüzü) ---
-# HTML içeriği PostgreSQL entegrasyonundan etkilenmediği için değişmedi.
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -623,36 +604,35 @@ HTML_TEMPLATE = '''
         .stok-table th:nth-child(1) { width: 15%; } .stok-table th:nth-child(2) { width: 10%; } .stok-table th:nth-child(3) { width: 10%; } .stok-table th:nth-child(4) { width: 10%; } .stok-table th:nth-child(5) { width: 10%; } .stok-table th:nth-child(6) { width: 10%; }
         .siparis-table th:nth-child(1) { width: 5%; } .siparis-table th:nth-child(4), .siparis-table th:nth-child(5) { width: 10%; } .siparis-table th:nth-child(7), .siparis-table th:nth-child(8) { width: 10%; } .siparis-table th:nth-child(10) { width: 10%; }
         
-        /* --- YENİ MOBİL UYUM DÜZENLEMELERİ --- */
+        /* --- MOBİL UYUM DÜZENLEMELERİ --- */
         
-        /* Mobil Cihazlar İçin Tablo Kaydırma */
         .table-responsive {
-            overflow-x: auto; /* Yatay kaydırmayı etkinleştirir */
+            overflow-x: auto; 
             margin-top: 15px;
         }
 
-        /* Mobil Sipariş Tablosu Genişlik Ayarları */
         .siparis-table {
-            min-width: 900px; /* Mobil görünümde kaydırmayı zorlamak için minimum genişlik */
-            table-layout: auto; /* Otomatik sütun genişliği */
+            min-width: 900px; 
+            table-layout: auto; 
         }
         .siparis-table th, .siparis-table td {
-            white-space: nowrap; /* İçeriğin kaydırılmasını sağlar */
+            white-space: nowrap; 
         }
-        .siparis-table th:nth-child(1) { width: 50px; } /* ID */
-        .siparis-table th:nth-child(2) { width: 100px; } /* Kod */
-        .siparis-table th:nth-child(3) { width: 180px; } /* Ürün (En uzun olan) */
-        .siparis-table th:nth-child(4) { width: 150px; } /* Müşteri */
-        .siparis-table th:nth-child(5) { width: 100px; } /* Sipariş Tarihi */
-        .siparis-table th:nth-child(6) { width: 100px; } /* Termin Tarihi */
-        .siparis-table th:nth-child(7) { width: 80px; } /* Bekleyen M² */
-        .siparis-table th:nth-child(8) { width: 90px; } /* Durum */
-        .siparis-table th:nth-child(9) { width: 120px; } /* Planlanan İş Günü */
-        .siparis-table th:nth-child(10) { width: 160px; } /* İşlem */
+        .siparis-table th:nth-child(1) { width: 50px; } 
+        .siparis-table th:nth-child(2) { width: 100px; } 
+        .siparis-table th:nth-child(3) { width: 180px; } 
+        .siparis-table th:nth-child(4) { width: 150px; } 
+        .siparis-table th:nth-child(5) { width: 100px; } 
+        .siparis-table th:nth-child(6) { width: 100px; } 
+        .siparis-table th:nth-child(7) { width: 80px; } 
+        .siparis-table th:nth-child(8) { width: 90px; } 
+        .siparis-table th:nth-child(9) { width: 120px; } 
+        .siparis-table th:nth-child(10) { width: 160px; } 
         
     </style>
     <script>
         const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
+        
         function filterProductCodes() {
             const cinsi = document.getElementById('cinsi_select').value;
             const kalinlik = document.getElementById('kalinlik_select').value;
@@ -675,6 +655,38 @@ HTML_TEMPLATE = '''
             }
         }
         document.addEventListener('DOMContentLoaded', filterProductCodes);
+
+        // YENİ EK: DÜZENLEME MODAL FONKSİYONU
+        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu) {
+            
+            const yeni_m2 = prompt(`Sipariş ID ${id} için yeni M² miktarını girin (Mevcut: ${m2}):`);
+            
+            if (yeni_m2 !== null && !isNaN(parseInt(yeni_m2))) {
+                const yeni_urun_kodu = prompt(`Sipariş ID ${id} için yeni Ürün Kodunu girin (Mevcut: ${urun_kodu}):`, urun_kodu);
+                
+                if (yeni_urun_kodu !== null) {
+                     // Basitleştirilmiş: Sadece M2 ve Ürün Kodu düzenlemesi yapıyoruz.
+                     
+                     const form = document.createElement('form');
+                     form.method = 'POST';
+                     form.action = '/siparis';
+                     
+                     form.innerHTML = `
+                         <input type="hidden" name="action" value="duzenle_siparis">
+                         <input type="hidden" name="siparis_id" value="${id}">
+                         <input type="hidden" name="yeni_m2" value="${parseInt(yeni_m2)}">
+                         <input type="hidden" name="yeni_urun_kodu" value="${yeni_urun_kodu}">
+                         <input type="hidden" name="yeni_cinsi" value="${cinsi}">
+                         <input type="hidden" name="yeni_kalinlik" value="${kalinlik}">
+                     `;
+                     
+                     document.body.appendChild(form);
+                     form.submit();
+                }
+            } else if (yeni_m2 !== null) {
+                alert('Lütfen geçerli bir M² miktarı girin.');
+            }
+        }
     </script>
 </head>
 <body>
@@ -801,6 +813,7 @@ HTML_TEMPLATE = '''
                 {% endif %}
             </div>
         </div>
+        </div>
         <h2>3. Detaylı Stok Durumu ve Eksik Planlama (M²)</h2>
         <table class="stok-table">
             <tr>
@@ -864,16 +877,19 @@ HTML_TEMPLATE = '''
                 </td>
                 <td>
                     {% if siparis.durum == 'Bekliyor' %}
-                        <form action="/siparis" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="action" value="tamamla_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: green; padding: 4px 8px;">Tamamla</button>
-                        </form>
-                        <form action="/siparis" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="action" value="iptal_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: darkred; padding: 4px 8px;">İptal Et</button>
-                        </form>
+                        <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
+                        
+                        <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
+                            <input type="hidden" name="action" value="sil_siparis">
+                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                            <button type="submit" style="background-color: darkred; padding: 4px 8px;">Kalıcı Sil</button>
+                        </form>
+                        
+                        <form action="/siparis" method="POST" style="display:inline-block;">
+                            <input type="hidden" name="action" value="tamamla_siparis">
+                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                            <button type="submit" style="background-color: green; padding: 4px 8px; margin-top: 5px;">Tamamla</button>
+                        </form>
                     {% else %}
                         -
                     {% endif %}
