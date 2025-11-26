@@ -252,6 +252,10 @@ def calculate_planning(conn):
         
         for siparis in bekleyen_siparisler:
             
+            # YENİ EK GÜVENLİK: Sorgu sonucunu döngüden hemen önce Python'da zorla temizle
+            siparis['cinsi'] = siparis['cinsi'].strip().upper()
+            siparis['kalinlik'] = siparis['kalinlik'].strip().upper()
+            
             # SİPARİŞ ANAHTAR OLUŞTURMA: Her zaman temiz (KeyError'ı engellemek ve eşleşmeyi sağlamak için)
             temiz_cinsi = siparis['cinsi'].strip().upper()
             temiz_kalinlik = siparis['kalinlik'].strip().upper()
@@ -425,9 +429,11 @@ def index():
         
         bekleyen_m2_raw = cur.fetchone()
         
-        # KRİTİK DÜZELTME: bekleyen_m2_raw['toplam_m2'] değeri None ise 0 olarak kabul et.
-        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
-        
+        # KRİTİK DÜZELTME: Gelen değeri en güvenli şekilde yorumla (NULL/None durumunu 0'a çevir)
+        gerekli_siparis_m2 = 0
+        if bekleyen_m2_raw and bekleyen_m2_raw.get('toplam_m2') is not None:
+             gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
+
         # Eksik hesaplama mantığı
         sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
         ham_eksik = max(0, sivali_eksik - ham_m2)
@@ -444,7 +450,7 @@ def index():
     # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
     return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP)
 
-# --- KRİTİK VERİ KURTARMA ROTASI (Diğer rotalarla aynı seviyede olmalı) ---
+# --- KRİTİK VERİ KURTARMA ROTASI (Doğru yerleştirilmiş) ---
 @app.route('/admin/data_repair', methods=['GET'])
 def repair_data_integrity():
     """Veritabanındaki cinsi ve kalinlik kolonlarındaki boşlukları ve küçük harfleri düzeltir."""
@@ -878,7 +884,10 @@ def api_stok_verileri():
             
             bekleyen_m2_raw = cur.fetchone()
             
-            gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
+            gerekli_siparis_m2 = 0
+            if bekleyen_m2_raw and bekleyen_m2_raw.get('toplam_m2') is not None:
+                gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
+
             sivali_stok = stok_map.get(stok_key, {}).get('Sivali', 0)
             ham_stok = stok_map.get(stok_key, {}).get('Ham', 0)
             sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
