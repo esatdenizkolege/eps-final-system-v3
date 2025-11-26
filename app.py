@@ -418,14 +418,14 @@ def index():
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
-        # *** KRİTİK SORGULAMA DÜZELTMESİ (V8 - Doğrudan Eşleşme) ***
-        # data_repair rotası veriyi zaten temizlediği için, double-cleaning hatasını önlemek amacıyla sorgu basitleştirildi.
+        # *** KRİTİK SORGULAMA DÜZELTMESİ (V9 - ILIKE ZORLAMA) ***
+        # PostgreSQL karakter eşleşme sorununu aşmak için ILIKE (Case Insensitive LIKE) kullanıldı.
         cur.execute(""" 
             SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
             FROM siparisler 
             WHERE durum='Bekliyor' 
-            AND cinsi = %s 
-            AND kalinlik = %s 
+            AND cinsi ILIKE %s 
+            AND kalinlik ILIKE %s 
         """, (cinsi, kalinlik))
         
         bekleyen_m2_raw = cur.fetchone()
@@ -880,13 +880,13 @@ def api_stok_verileri():
             stok_data[f"{key} (Ham)"] = stok_map.get(stok_key, {}).get('Ham', 0)
             stok_data[f"{key} (Sivali)"] = stok_map.get(stok_key, {}).get('Sivali', 0)
             
-            # *** KRİTİK SORGULAMA DÜZELTMESİ (V8 - Doğrudan Eşleşme) ***
+            # *** KRİTİK SORGULAMA DÜZELTMESİ (V9 - ILIKE ZORLAMA) ***
             cur.execute(""" 
                 SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
                 FROM siparisler 
                 WHERE durum='Bekliyor' 
-                AND cinsi = %s 
-                AND kalinlik = %s 
+                AND cinsi ILIKE %s 
+                AND kalinlik ILIKE %s 
             """, (cinsi, kalinlik))
             
             bekleyen_m2_raw = cur.fetchone()
