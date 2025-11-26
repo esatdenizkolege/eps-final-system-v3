@@ -32,25 +32,14 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 DEFAULT_KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
 CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 
-def load_kalinliklar():
-    """Kalınlık listesini JSON'dan yükler, yoksa varsayılanı kullanır ve kaydeder."""
-    if os.path.exists(KALINLIK_FILE):
-        with open(KALINLIK_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get('kalinliklar', DEFAULT_KALINLIKLAR)
-    # Yoksa varsayılanı kaydet ve döndür
-    save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
-    return DEFAULT_KALINLIKLAR
-
-def save_kalinliklar(kalinliklar):
-    """Kalınlık listesini JSON'a kaydeder."""
-    save_data({'kalinliklar': kalinliklar}, KALINLIK_FILE)
-    
-# Dinamik olarak yükle (Uygulama başlatıldığında güncel kalınlıklar yüklenir)
-KALINLIKLAR = load_kalinliklar()
-VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-
 # --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ ---
+# Hata Düzeltme: load_data ve save_data fonksiyonları, 
+# load_kalinliklar fonksiyonundan önce tanımlanmalıdır.
+
+def save_data(data, filename):
+    """JSON verisini kaydeder."""
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4)
 
 def load_data(filename):
     """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
@@ -81,11 +70,25 @@ def load_data(filename):
         }
     return {}
 
-def save_data(data, filename):
-    """JSON verisini kaydeder."""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+def load_kalinliklar():
+    """Kalınlık listesini JSON'dan yükler, yoksa varsayılanı kullanır ve kaydeder."""
+    if os.path.exists(KALINLIK_FILE):
+        with open(KALINLIK_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('kalinliklar', DEFAULT_KALINLIKLAR)
+    # Yoksa varsayılanı kaydet ve döndür
+    save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
+    return DEFAULT_KALINLIKLAR
 
+def save_kalinliklar(kalinliklar):
+    """Kalınlık listesini JSON'a kaydeder."""
+    save_data({'kalinliklar': kalinliklar}, KALINLIK_FILE)
+    
+# Dinamik olarak yükle (Uygulama başlatıldığında güncel kalınlıklar yüklenir)
+KALINLIKLAR = load_kalinliklar()
+VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
+
+# Veri haritalarını yükle
 CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
 URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
 
