@@ -321,7 +321,7 @@ def calculate_planning(conn):
             kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
             
             if key in temp_sivali_stok_kopyasi:
-                 temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
+                 temp_stok_sivali[key] -= karsilanan_sivali
             
             if kalan_ihtiyac > 0:
                 siva_uretim_sirasli_ihtiyac.append({
@@ -815,13 +815,15 @@ def temizle_veritabani():
         # Stokları sil
         cur.execute("DELETE FROM stok")
         
-        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+        # *** KRİTİK DÜZELTME: Veritabanını sıfırlamadan önce ve sonra JSON'dan güncel listeleri zorla yükle ***
+        
+        # 1. JSON'dan güncel listeleri zorla yükle
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
-        VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-        
-        # Sıfır miktar ile varsayılan stokları yeniden ekle (init_db mantığı)
+        VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR] # VARYANTLAR güncellendi
+
+        # 2. Sıfır miktar ile varsayılan stokları yeniden ekle (Güncel listeleri kullanıyoruz)
         for c, k in VARYANTLAR:
             temiz_c = c.strip().upper()
             temiz_k = k.strip().upper()
@@ -833,13 +835,19 @@ def temizle_veritabani():
                 """, (temiz_c, temiz_k, asama, 0))
                 
         conn.commit()
-        return redirect(url_for('index', message="✅ TÜM VERİLER SİLİNDİ ve STOKLAR SIFIRLANDI!"))
+        
+        # Uygulama bağlamını güncellemek için bir ipucu (zorunlu değil ama faydalı)
+        with app.app_context():
+            init_db() # Yeni listelerle veritabanı başlatma adımlarını tekrar çalıştır
+            
+        return redirect(url_for('index', message="✅ TÜM VERİLER SİLİNDİ ve GÜNCEL STOKLAR SIFIRLANDI!"))
         
     except Exception as e:
         if conn: conn.rollback()
         return redirect(url_for('index', message=f"❌ Veritabanı Temizleme Hatası: {str(e)}"))
     finally:
         if conn: conn.close()
+
 
 # --- 4. MOBİL İÇİN ROTALAR (JSON API ve HTML GÖRÜNÜMÜ) ---
 
