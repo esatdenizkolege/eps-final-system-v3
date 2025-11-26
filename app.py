@@ -418,9 +418,9 @@ def index():
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
-        # *** NİHAİ KRİTİK SQL DÜZELTMESİ: Siparişleri TRIM/UPPER ile çekiyoruz ***
+        # *** NİHAİ KRİTİK SQL DÜZELTMESİ: COALESCE ile NULL sonucunu 0'a zorla ***
         cur.execute(""" 
-            SELECT SUM(bekleyen_m2) as toplam_m2 
+            SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
             FROM siparisler 
             WHERE durum='Bekliyor' 
             AND TRIM(UPPER(cinsi)) = %s 
@@ -429,10 +429,8 @@ def index():
         
         bekleyen_m2_raw = cur.fetchone()
         
-        # KRİTİK DÜZELTME: Gelen değeri en güvenli şekilde yorumla (NULL/None durumunu 0'a çevir)
-        gerekli_siparis_m2 = 0
-        if bekleyen_m2_raw and bekleyen_m2_raw.get('toplam_m2') is not None:
-             gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
+        # YENİ DÜZELTME: COALESCE kullanıldığı için sadece dictionary'den değeri alıyoruz.
+        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
 
         # Eksik hesaplama mantığı
         sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
@@ -875,7 +873,7 @@ def api_stok_verileri():
             
             # SQL sorgusu temiz Cinsi ve Kalınlığı kullanmalı
             cur.execute(""" 
-                SELECT SUM(bekleyen_m2) as toplam_m2 
+                SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
                 FROM siparisler 
                 WHERE durum='Bekliyor' 
                 AND TRIM(UPPER(cinsi)) = %s 
@@ -884,9 +882,8 @@ def api_stok_verileri():
             
             bekleyen_m2_raw = cur.fetchone()
             
-            gerekli_siparis_m2 = 0
-            if bekleyen_m2_raw and bekleyen_m2_raw.get('toplam_m2') is not None:
-                gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
+            # COALESCE kullanıldığı için güvenle değeri alıyoruz.
+            gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
 
             sivali_stok = stok_map.get(stok_key, {}).get('Sivali', 0)
             ham_stok = stok_map.get(stok_key, {}).get('Ham', 0)
