@@ -1386,3 +1386,5 @@ HTML_TEMPLATE = '''
 </body>
 </html>
 '''
+# app.py dosyasının en altına ekleyin:
+# Nihai zorla yeniden dağıtım denemesi
