@@ -321,7 +321,7 @@ def calculate_planning(conn):
             kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
             
             if key in temp_sivali_stok_kopyasi:
-                 temp_stok_sivali[key] -= karsilanan_sivali
+                 temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
             
             if kalan_ihtiyac > 0:
                 siva_uretim_sirasli_ihtiyac.append({
@@ -392,10 +392,10 @@ def index():
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
     
-    # KRİTİK GÜNCELLEME: Tüm listeleri ve haritaları en baştan yükle
+    # *** KRİTİK DÜZELTME (V7): JSON verilerini ve değişkenleri HER SAYFA YÜKLEMEDE ZORLA YENİDEN YÜKLE ***
+    # Bu, yeni eklenen Cins/Kalınlıkların VARYANTLAR listesine girmesini garanti eder.
     global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
     
-    # 1. JSON verilerini ve değişkenleri yeniden yükle (Tutarlılık için)
     KALINLIKLAR = load_kalinliklar()
     CINSLER = load_cinsler()
     VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
