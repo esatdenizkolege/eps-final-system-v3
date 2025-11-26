@@ -269,14 +269,26 @@ def calculate_planning(conn):
             eksik_sivali = kalan_ihtiyac 
             
             if eksik_sivali > 0:
-                toplam_gerekli_siva += eksik_sivali
-                siva_uretim_ihtiyaci.append({
-                    'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
-                    'm2': eksik_sivali
-                })
+                # KRİTİK DÜZELTME: Aynı ürünün ihtiyaçlarını birleştirmek için kontrol
+                found = False
+                for item in siva_uretim_ihtiyaci:
+                    if item['key'] == f"{siparis['cinsi']} {siparis['kalinlik']}":
+                        item['m2'] += eksik_sivali
+                        found = True
+                        break
+                if not found:
+                    siva_uretim_ihtiyaci.append({
+                        'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                        'm2': eksik_sivali
+                    })
                 
-            is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
-            planlama_sonuclari[siparis['id']] = is_gunu if toplam_gerekli_siva > 0 else 0 
+            toplam_gerekli_siva += eksik_sivali # Sıva ihtiyacını birikimli olarak artır
+            
+            # Planlanan İş Günü hesaplaması (önceki planlama mantığına göre devam eder)
+            # Bu sadece görselleştirme içindir ve planlama mantığı bunu kullanır.
+            current_total_siva_needed = sum(item['m2'] for item in siva_uretim_ihtiyaci)
+            is_gunu = math.ceil(current_total_siva_needed / kapasite) if kapasite > 0 else -1
+            planlama_sonuclari[siparis['id']] = is_gunu if current_total_siva_needed > 0 else 0 
             # NOT: is_gunu hesaplaması birikimli olduğu için ilk sipariş 1, ikinci sipariş 2... gibi ilerler.
 
         # Hesaplanan iş günlerini veritabanına kaydet
@@ -285,15 +297,40 @@ def calculate_planning(conn):
         conn.commit()
         
         # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
+        # calculate_planning içindeki siva_uretim_ihtiyaci listesinin güncel (toplanmış) hali kullanılır
+        
+        # Ürün bazlı ihtiyaçları (sipariş sırasına göre) yeniden sırala
+        # Aynı ürüne ait ihtiyaçları yeniden sipariş sırasına göre dizmek zor olduğu için, 
+        # sipariş listesinin sırasını koruyan, ama sadece ihtiyacı olanları içeren yeni bir liste oluşturalım.
+        
+        siva_uretim_sirasli_ihtiyac = []
+        temp_sivali_stok_kopyasi = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
+
+        for siparis in bekleyen_siparisler:
+            key = (siparis['cinsi'], siparis['kalinlik'])
+            stok_sivali_available = temp_sivali_stok_kopyasi.get(key, 0)
+            gerekli_m2 = siparis['bekleyen_m2']
+            
+            # Stoktan karşılanan miktarı düş
+            karsilanan_sivali = min(gerekli_m2, stok_sivali_available)
+            kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
+            
+            temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
+            
+            if kalan_ihtiyac > 0:
+                siva_uretim_sirasli_ihtiyac.append({
+                    'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                    'm2': kalan_ihtiyac
+                })
+
         siva_plan_detay = defaultdict(list) 
-        kalan_kapasite_bugun = 0
         ihtiyac_index = 0
         
         for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
             kalan_kapasite_bugun = kapasite
             
-            while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_ihtiyaci):
-                ihtiyac = siva_uretim_ihtiyaci[ihtiyac_index]
+            while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_sirasli_ihtiyac):
+                ihtiyac = siva_uretim_sirasli_ihtiyac[ihtiyac_index]
                 key = ihtiyac['key']
                 m2_gerekli = ihtiyac['m2']
                 
@@ -310,7 +347,7 @@ def calculate_planning(conn):
                 if ihtiyac['m2'] <= 0:
                     ihtiyac_index += 1
                 
-            if ihtiyac_index >= len(siva_uretim_ihtiyaci):
+            if ihtiyac_index >= len(siva_uretim_sirasli_ihtiyac):
                 break 
         
         # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
@@ -349,18 +386,20 @@ def index():
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
     
-    # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+    # KRİTİK GÜNCELLEME: Tüm listeleri ve haritaları en baştan yükle
     global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
+    
+    # 1. JSON verilerini ve değişkenleri yeniden yükle (Tutarlılık için)
     KALINLIKLAR = load_kalinliklar()
     CINSLER = load_cinsler()
     VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-    
-    # KRİTİK DÜZELTME: Global ürün kodu haritasını her zaman dosyadan yeniden yükle
     CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
     URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
     
+    # 2. Planlama ve Stok Haritasını Hesapla
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
+    # 3. Stok ve Eksik Analizi Listesini Oluştur
     stok_list = []
     for cinsi, kalinlik in VARYANTLAR:
         key = (cinsi, kalinlik)
@@ -375,7 +414,7 @@ def index():
         # KRİTİK DÜZELTME: bekleyen_m2_raw['toplam_m2'] değeri None ise 0 olarak kabul et.
         gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
         
-        # Eksik hesaplama mantığı
+        # Eksik hesaplama mantığı (Bu kısım doğru çalışıyor olmalı)
         sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
         ham_eksik = max(0, sivali_eksik - ham_m2)
         
@@ -519,6 +558,8 @@ def handle_siparis_islem():
                         siparis_kodu = get_next_siparis_kodu(conn)
                         
                         # Ürün kodundan cinsi ve kalınlığı ayrıştır
+                        # CINS_TO_BOYALI_MAP'in global olarak güncel olduğu varsayılır
+                        global CINS_TO_BOYALI_MAP
                         cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
                         if not cins_kalinlik_key:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
@@ -548,6 +589,7 @@ def handle_siparis_islem():
             yeni_m2 = int(request.form['yeni_m2'])
             
             # Ürün kodundan cins/kalınlık tespiti
+            global CINS_TO_BOYALI_MAP # Global haritayı kullan
             cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
             if not cins_kalinlik_key:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
@@ -582,6 +624,7 @@ def handle_siparis_islem():
         message = f"❌ Veritabanı Hatası: {str(e)}"
     finally: 
         if conn: conn.close()
+    # Yönlendirme yapıldığında index() rotası çalışır ve planlama güncellenir.
     return redirect(url_for('index', message=message))
 
 @app.route('/ayarla/kapasite', methods=['POST'])
@@ -657,11 +700,11 @@ def ayarla_kalinlik():
         # Veritabanına ekle
         for c, k in new_variants_to_add:
              for asama in ['Ham', 'Sivali']:
-                cur.execute("""
+                 cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
                     VALUES (%s, %s, %s, %s) 
                     ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
-                """, (c, k, asama, 0))
+                 """, (c, k, asama, 0))
         
         conn.commit()
         
@@ -811,7 +854,7 @@ def api_stok_verileri():
             'siva_plan_detay': dict(siva_plan_detay), 
             'sevkiyat_plan_detay': dict(sevkiyat_plan_detay) 
         })
-    
+        
     except Exception as e:
         print(f"--- KRİTİK HATA LOGU (api_stok_verileri) ---")
         print(f"Hata Tipi: {type(e).__name__}")
@@ -1038,24 +1081,20 @@ HTML_TEMPLATE = '''
         
         <div class="grid">
             
-            <!-- 2. SİPARİŞ GİRİŞİ (YENİ ÇOKLU GİRİŞ) -->
             <div class="form-box" style="grid-column: 1 / span 1;">
                 <h2>2. Yeni Sipariş Girişi (Çoklu Ürün)</h2>
                 <form action="/siparis" method="POST">
                     <input type="hidden" name="action" value="yeni_siparis">
                     
-                    <!-- Ana Sipariş Bilgileri -->
                     <div class="form-section">
                         <input type="text" name="musteri" required placeholder="Müşteri Adı" style="width: 98%;">
                         <label style="font-size: 0.9em; margin-top: 5px; display: block;">Sipariş Tarihi: <input type="date" name="siparis_tarihi" value="{{ today }}" required style="width: calc(50% - 8px);"></label>
                         <label style="font-size: 0.9em; margin-top: 5px; display: block;">Termin Tarihi: <input type="date" name="termin_tarihi" required style="width: calc(50% - 8px);"></label>
                     </div>
                     
-                    <!-- Ürün Giriş Satırları -->
                     <div style="font-weight: bold; margin-top: 15px; border-bottom: 1px dashed #007bff; padding-bottom: 5px;">Ürün Kodları ve Metraj (M²)</div>
                     <div id="siparis-urun-container" style="margin-top: 10px;">
-                        <!-- JS ile satırlar buraya eklenecek (5 adet başlangıçta) -->
-                    </div>
+                        </div>
                     
                     <button type="button" onclick="addRow(1)" style="background-color: #28a745; margin-bottom: 15px; width: 100%;">+ Ürün Satırı Ekle</button>
                     
@@ -1063,7 +1102,6 @@ HTML_TEMPLATE = '''
                 </form>
             </div>
             
-            <!-- 1. STOK HAREKETLERİ -->
             <div class="form-box" style="grid-column: 2 / span 1; border-color: #6c757d; background-color: #f8f9fa;">
                 <h2>1. Stok Hareketleri</h2>
                 <div class="form-section">
@@ -1076,7 +1114,6 @@ HTML_TEMPLATE = '''
                         </form>
                     </div>
                     
-                    <!-- YENİ: Kalınlık ve Cins Ekleme Formu -->
                     <div class="kapasite-box" style="margin-top: 15px; background-color: #ffe0b2;">
                         <h3>📏 Yeni Cins/Kalınlık Ekle</h3>
                         <form action="/ayarla/kalinlik" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
@@ -1087,7 +1124,6 @@ HTML_TEMPLATE = '''
                         </form>
                     </div>
                     
-                    <!-- Mevcut Ürün Kodu Ekleme Formu -->
                     <div class="kapasite-box" style="margin-top: 15px; background-color: #d8f5ff;">
                         <h3>➕ Yeni Ürün Kodu Ekle</h3>
                         <form action="/ayarla/urun_kodu" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
@@ -1245,17 +1281,14 @@ HTML_TEMPLATE = '''
                 </td>
                 <td>
                     {% if siparis.durum == 'Bekliyor' %}
-                        <!-- DÜZENLE BUTONU -->
                         <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
                         
-                        <!-- KALICI SİL BUTONU -->
                         <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
                             <input type="hidden" name="action" value="sil_siparis">
                             <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
                             <button type="submit" style="background-color: darkred; padding: 4px 8px; margin-right: 5px;">Kalıcı Sil</button>
                         </form>
                         
-                        <!-- TAMAMLA BUTONU -->
                         <form action="/siparis" method="POST" style="display:inline-block;">
                             <input type="hidden" name="action" value="tamamla_siparis">
                             <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
