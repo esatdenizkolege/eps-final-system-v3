@@ -346,10 +346,14 @@ def index():
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
     
     # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
-    global KALINLIKLAR, CINSLER, VARYANTLAR
+    global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
     KALINLIKLAR = load_kalinliklar()
     CINSLER = load_cinsler()
     VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
+    
+    # KRİTİK DÜZELTME: Global ürün kodu haritasını her zaman dosyadan yeniden yükle
+    CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
+    URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
     
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
@@ -685,6 +689,11 @@ def ayarla_urun_kodu():
             if cins_kalinlik_key not in urun_kodlari_map: urun_kodlari_map[cins_kalinlik_key] = []
             urun_kodlari_map[cins_kalinlik_key].append(yeni_kod); urun_kodlari_map[cins_kalinlik_key].sort()
             save_data(urun_kodlari_map, 'urun_kodlari.json')
+            
+            # KRİTİK DÜZELTME: Global haritayı hemen güncelle ki, bir sonraki isteği doğru görebilsin.
+            global CINS_TO_BOYALI_MAP
+            CINS_TO_BOYALI_MAP = urun_kodlari_map 
+            
             message = f"✅ Ürün kodu **{yeni_kod}** ({cins_kalinlik_key}) başarıyla eklendi."
     except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
     return redirect(url_for('index', message=message))
@@ -927,6 +936,7 @@ HTML_TEMPLATE = '''
             urunKoduSelect.innerHTML = '<option value="">Ürün Kodu Seçin</option>'; 
             
             if (cinsi && kalinlik) {
+                // Burada CINS_TO_BOYALI_MAP kullanılıyor, bu nedenle Python tarafında güncel olması ZORUNLU.
                 const key = cinsi + ' ' + kalinlik;
                 const codes = CINS_TO_BOYALI_MAP[key] || [];
                 
