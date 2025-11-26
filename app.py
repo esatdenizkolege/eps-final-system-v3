@@ -34,8 +34,6 @@ DEFAULT_KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
 DEFAULT_CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 
 # --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ ---
-# Hata Düzeltme: load_data ve save_data fonksiyonları, 
-# load_kalinliklar fonksiyonundan önce tanımlanmalıdır.
 
 def save_data(data, filename):
     """JSON verisini kaydeder."""
@@ -129,6 +127,7 @@ def init_db():
         conn = get_db_connection()
         cur = conn.cursor()
         
+        # Stok Tablosu
         cur.execute(""" 
             CREATE TABLE IF NOT EXISTS stok ( 
                 id SERIAL PRIMARY KEY, 
@@ -139,6 +138,7 @@ def init_db():
                 UNIQUE(cinsi, kalinlik, asama) 
             ); 
         """)
+        # Siparişler Tablosu
         cur.execute(""" 
             CREATE TABLE IF NOT EXISTS siparisler ( 
                 id SERIAL PRIMARY KEY, 
@@ -163,12 +163,14 @@ def init_db():
         
         # Varsayılan stok girişleri (EĞER YOKSA ekle)
         for c, k in VARYANTLAR:
+            temiz_c = c.strip().upper()
+            temiz_k = k.strip().upper()
             for asama in ['Ham', 'Sivali']:
                 cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
                     VALUES (%s, %s, %s, %s) 
                     ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
-                """, (c, k, asama, 0))
+                """, (temiz_c, temiz_k, asama, 0))
         
         conn.commit()
         cur.close()
@@ -250,7 +252,7 @@ def calculate_planning(conn):
         
         for siparis in bekleyen_siparisler:
             
-            # *** SİPARİŞ ANAHTAR OLUŞTURMA: Her zaman temiz (KeyError'ı engellemek ve eşleşmeyi sağlamak için) ***
+            # SİPARİŞ ANAHTAR OLUŞTURMA: Her zaman temiz (KeyError'ı engellemek ve eşleşmeyi sağlamak için)
             temiz_cinsi = siparis['cinsi'].strip().upper()
             temiz_kalinlik = siparis['kalinlik'].strip().upper()
             key = (temiz_cinsi, temiz_kalinlik)
@@ -296,7 +298,7 @@ def calculate_planning(conn):
             cur.execute("UPDATE siparisler SET planlanan_is_gunu = %s WHERE id = %s", (is_gunu, siparis_id))
         conn.commit()
         
-        # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
+        # --- Kapasiteyi Ürün Bazında Dağıtma ---
         
         siva_uretim_sirasli_ihtiyac = []
         temp_sivali_stok_kopyasi = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
@@ -412,14 +414,21 @@ def index():
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
-        # SQL sorgusunda temiz Python değişkenleri kullanılıyor.
-        cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
+        # *** NİHAİ KRİTİK SQL DÜZELTMESİ: Siparişleri TRIM/UPPER ile çekiyoruz ***
+        cur.execute(""" 
+            SELECT SUM(bekleyen_m2) as toplam_m2 
+            FROM siparisler 
+            WHERE durum='Bekliyor' 
+            AND TRIM(UPPER(cinsi)) = %s 
+            AND TRIM(UPPER(kalinlik)) = %s 
+        """, (cinsi, kalinlik))
+        
         bekleyen_m2_raw = cur.fetchone()
         
         # KRİTİK DÜZELTME: bekleyen_m2_raw['toplam_m2'] değeri None ise 0 olarak kabul et.
         gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
         
-        # Eksik hesaplama mantığı (Bu kısım doğru çalışıyor olmalı)
+        # Eksik hesaplama mantığı
         sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
         ham_eksik = max(0, sivali_eksik - ham_m2)
         
@@ -440,7 +449,7 @@ def handle_stok_islem():
     """Stok hareketlerini yönetir."""
     action = request.form['action']
     
-    # *** STOK İŞLEMLERİNDE GİRİŞ TEMİZLİĞİ ***
+    # *** STOK İŞLEMLERİNDE GİRİŞ TEMİZLİĞİ (Veritabanına temiz kaydediyoruz) ***
     cinsi = request.form['cinsi'].strip().upper()
     kalinlik = request.form['kalinlik'].strip().upper()
     
@@ -566,7 +575,6 @@ def handle_siparis_islem():
                         siparis_kodu = get_next_siparis_kodu(conn)
                         
                         # Ürün kodundan cinsi ve kalınlığı ayrıştır
-                        # CINS_TO_BOYALI_MAP'i sadece okuduğumuz için 'global' bildirimine gerek yoktur.
                         cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
                         if not cins_kalinlik_key:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
@@ -593,7 +601,7 @@ def handle_siparis_islem():
             cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
             
-        # DÜZELTİLDİ: Siparişi Düzenleme (SyntaxError veren global bildirim kaldırıldı)
+        # DÜZELTİLDİ: Siparişi Düzenleme 
         elif action == 'duzenle_siparis':
             siparis_id = request.form['siparis_id']
             yeni_urun_kodu = request.form['yeni_urun_kodu']
@@ -624,7 +632,6 @@ def handle_siparis_islem():
             cur.execute("DELETE FROM siparisler WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} veritabanından **kalıcı olarak silindi**."
             
-        # Kaldırılan 'iptal_siparis' bloğu
             
         cur.close()
     except psycopg2.IntegrityError: 
@@ -825,17 +832,25 @@ def api_stok_verileri():
         stok_data = {}
         deficit_analysis = {}
 
-        for cinsi, kalinlik in VARYANTLAR:
-            key = f"{cinsi.strip().upper()} {kalinlik.strip().upper()}"
+        for cinsi_raw, kalinlik_raw in VARYANTLAR:
             
-            # Stok map'ini temiz anahtarla kontrol et
-            stok_key = (cinsi.strip().upper(), kalinlik.strip().upper())
+            cinsi = cinsi_raw.strip().upper()
+            kalinlik = kalinlik_raw.strip().upper()
+            key = f"{cinsi} {kalinlik}"
+            stok_key = (cinsi, kalinlik)
             
             stok_data[f"{key} (Ham)"] = stok_map.get(stok_key, {}).get('Ham', 0)
             stok_data[f"{key} (Sivali)"] = stok_map.get(stok_key, {}).get('Sivali', 0)
             
             # SQL sorgusu temiz Cinsi ve Kalınlığı kullanmalı
-            cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (stok_key[0], stok_key[1]))
+            cur.execute(""" 
+                SELECT SUM(bekleyen_m2) as toplam_m2 
+                FROM siparisler 
+                WHERE durum='Bekliyor' 
+                AND TRIM(UPPER(cinsi)) = %s 
+                AND TRIM(UPPER(kalinlik)) = %s 
+            """, (cinsi, kalinlik))
+            
             bekleyen_m2_raw = cur.fetchone()
             
             gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
