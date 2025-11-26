@@ -710,6 +710,23 @@ HTML_TEMPLATE = '''
         const CINS_OPTIONS = `{% for c in CINSLER %}<option value="{{ c }}">{{ c }}</option>{% endfor %}`;
         const KALINLIK_OPTIONS = `{% for k in KALINLIKLAR %}<option value="{{ k }}">{{ k }}</option>{% endfor %}`;
 
+        // Satır şablonu (index yerine placeholder kullanıyoruz)
+        const ROW_TEMPLATE = `
+            <div class="siparis-satir" data-index="INDEX_PLACEHOLDER">
+                <select class="cinsi_select" name="cinsi_INDEX_PLACEHOLDER" required onchange="filterProductCodes(this)" style="width: 120px;">
+                    ${CINS_OPTIONS}
+                </select>
+                <select class="kalinlik_select" name="kalinlik_INDEX_PLACEHOLDER" required onchange="filterProductCodes(this)" style="width: 90px;">
+                    ${KALINLIK_OPTIONS}
+                </select>
+                <select class="urun_kodu_select" name="urun_kodu_INDEX_PLACEHOLDER" required style="width: 100px;">
+                    <option value="">Ürün Kodu Seçin</option>
+                </select>
+                <input type="number" name="m2_INDEX_PLACEHOLDER" min="1" required placeholder="M²" style="width: 70px;">
+                <button type="button" onclick="removeRow(this)" style="background-color: #dc3545; width: auto;">X</button>
+            </div>
+        `;
+
 
         // --- ÜRÜN KODU FİLTRELEME MANTIĞI ---
         function filterProductCodes(selectElement) {
@@ -744,32 +761,20 @@ HTML_TEMPLATE = '''
         let siparisSatirIndex = 0;
         
         function getNewRowHtml(index) {
-            // KRİTİK DÜZELTME: Statik seçenek değişkenleri kullanılıyor ve name parametreleri index ile güncelleniyor.
-            let html = `
-                <div class="siparis-satir" data-index="${index}">
-                    <select class="cinsi_select" name="cinsi_${index}" required onchange="filterProductCodes(this)" style="width: 120px;">
-                        ${CINS_OPTIONS}
-                    </select>
-                    <select class="kalinlik_select" name="kalinlik_${index}" required onchange="filterProductCodes(this)" style="width: 90px;">
-                        ${KALINLIK_OPTIONS}
-                    </select>
-                    <select class="urun_kodu_select" name="urun_kodu_${index}" required style="width: 100px;">
-                        <option value="">Ürün Kodu Seçin</option>
-                    </select>
-                    <input type="number" name="m2_${index}" min="1" required placeholder="M²" style="width: 70px;">
-                    <button type="button" onclick="removeRow(this)" style="background-color: #dc3545; width: auto;">X</button>
-                </div>
-            `;
-            return html;
+            // KRİTİK DÜZELTME: Satır şablonunda placeholder kullanıp replace ile index atıyoruz.
+            return ROW_TEMPLATE.replaceAll('INDEX_PLACEHOLDER', index);
         }
 
         function addRow() {
             const container = document.getElementById('siparis-urun-container');
-            container.insertAdjacentHTML('beforeend', getNewRowHtml(siparisSatirIndex));
+            const newHtml = getNewRowHtml(siparisSatirIndex);
+            
+            container.insertAdjacentHTML('beforeend', newHtml);
             
             // Yeni eklenen satırdaki kodları filtrele
             const newRow = container.querySelector(`[data-index="${siparisSatirIndex}"]`);
             const cinsiSelect = newRow.querySelector('.cinsi_select');
+            
             // Yeni eklenen satırın ilk elementi (cinsiSelect) üzerinden filtreleme başlatılıyor.
             filterProductCodes(cinsiSelect);
 
