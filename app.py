@@ -1387,4 +1387,4 @@ HTML_TEMPLATE = '''
 </html>
 '''
 # app.py dosyasının en altına ekleyin:
-# Nihai zorla yeniden dağıtım denemesi
+# Nihai zorla yeniden dağıtım
