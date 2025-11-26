@@ -189,105 +189,112 @@ def calculate_planning(conn):
     """
     Sıva planı, sevkiyat planı ve ürün bazlı sıva ihtiyacı detaylarını hesaplar.
     """
-    cur = conn.cursor()
-    kapasite = load_data(KAPASITE_FILE)['gunluk_siva_m2']
-    stok_map = {}
-    
-    cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
-    stok_raw = cur.fetchall()
-    
-    for row in stok_raw:
-        key = (row['cinsi'], row['kalinlik'])
-        if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
-        stok_map[key][row['asama']] = row['m2']
-
-    # KRİTİK KISIM: Termin tarihine göre sıralama
-    cur.execute("""
-        SELECT id, cinsi, kalinlik, bekleyen_m2, termin_tarihi 
-        FROM siparisler 
-        WHERE durum='Bekliyor' 
-        ORDER BY termin_tarihi ASC, siparis_tarihi ASC 
-    """)
-    bekleyen_siparisler = cur.fetchall()
-
-    siva_uretim_ihtiyaci = [] 
-    toplam_gerekli_siva = 0 
-    planlama_sonuclari = {} 
-    temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
-    
-    for siparis in bekleyen_siparisler:
-        key = (siparis['cinsi'], siparis['kalinlik'])
-        stok_sivali = temp_stok_sivali.get(key, 0)
-        gerekli_m2 = siparis['bekleyen_m2']
-        eksik_sivali = max(0, gerekli_m2 - stok_sivali)
-        temp_stok_sivali[key] = max(0, stok_sivali - gerekli_m2) 
-
-        if eksik_sivali > 0:
-            toplam_gerekli_siva += eksik_sivali
-            siva_uretim_ihtiyaci.append({
-                'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
-                'm2': eksik_sivali
-            })
-            
-        is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
-        planlama_sonuclari[siparis['id']] = is_gunu if eksik_sivali > 0 else 0
-
-    # Hesaplanan iş günlerini veritabanına kaydet
-    for siparis_id, is_gunu in planlama_sonuclari.items():
-        # PostgreSQL'de UPDATE sorgusu
-        cur.execute("UPDATE siparisler SET planlanan_is_gunu = %s WHERE id = %s", (is_gunu, siparis_id))
-    conn.commit()
-    
-    # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
-    siva_plan_detay = defaultdict(list) 
-    kalan_kapasite_bugun = 0
-    ihtiyac_index = 0
-    
-    for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
-        kalan_kapasite_bugun = kapasite
+    try: # Hata yakalamayı başlat
+        cur = conn.cursor()
+        kapasite = load_data(KAPASITE_FILE)['gunluk_siva_m2']
+        stok_map = {}
         
-        while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_ihtiyaci):
-            ihtiyac = siva_uretim_ihtiyaci[ihtiyac_index]
-            key = ihtiyac['key']
-            m2_gerekli = ihtiyac['m2']
-            
-            m2_yapilacak = min(m2_gerekli, kalan_kapasite_bugun)
-            
-            siva_plan_detay[gun].append({
-                'cinsi': key,
-                'm2': m2_yapilacak
-            })
-            
-            ihtiyac['m2'] -= m2_yapilacak
-            kalan_kapasite_bugun -= m2_yapilacak
-            
-            if ihtiyac['m2'] <= 0:
-                ihtiyac_index += 1
-            
-        if ihtiyac_index >= len(siva_uretim_ihtiyaci):
-            break 
-    
-    # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
-    bugun = datetime.now().date()
-    sevkiyat_plan_detay = defaultdict(list)
-    for i in range(0, 5): 
-        plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
-        # PostgreSQL'de SELECT sorgusu
+        cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
+        stok_raw = cur.fetchall()
+        
+        for row in stok_raw:
+            key = (row['cinsi'], row['kalinlik'])
+            if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
+            stok_map[key][row['asama']] = row['m2']
+
+        # KRİTİK KISIM: Termin tarihine göre sıralama
         cur.execute("""
-            SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
+            SELECT id, cinsi, kalinlik, bekleyen_m2, termin_tarihi 
             FROM siparisler 
-            WHERE durum='Bekliyor' AND termin_tarihi = %s
-            ORDER BY termin_tarihi ASC
-        """, (plan_tarihi,))
-        sevkiyatlar = cur.fetchall()
-        
-        if sevkiyatlar:
-            # RealDictCursor zaten sözlük listesi döndürür
-            sevkiyat_plan_detay[plan_tarihi] = sevkiyatlar
-    
-    cur.close()
-    return toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map
+            WHERE durum='Bekliyor' 
+            ORDER BY termin_tarihi ASC, siparis_tarihi ASC 
+        """)
+        bekleyen_siparisler = cur.fetchall()
 
+        siva_uretim_ihtiyaci = [] 
+        toplam_gerekli_siva = 0 
+        planlama_sonuclari = {} 
+        temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
+        
+        for siparis in bekleyen_siparisler:
+            key = (siparis['cinsi'], siparis['kalinlik'])
+            stok_sivali = temp_stok_sivali.get(key, 0)
+            gerekli_m2 = siparis['bekleyen_m2']
+            eksik_sivali = max(0, gerekli_m2 - stok_sivali)
+            temp_stok_sivali[key] = max(0, stok_sivali - gerekli_m2) 
+
+            if eksik_sivali > 0:
+                toplam_gerekli_siva += eksik_sivali
+                siva_uretim_ihtiyaci.append({
+                    'key': f"{siparis['cinsi']} {siparis['kalinlik']}",
+                    'm2': eksik_sivali
+                })
+                
+            is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
+            planlama_sonuclari[siparis['id']] = is_gunu if eksik_sivali > 0 else 0
+
+        # Hesaplanan iş günlerini veritabanına kaydet
+        for siparis_id, is_gunu in planlama_sonuclari.items():
+            # PostgreSQL'de UPDATE sorgusu
+            cur.execute("UPDATE siparisler SET planlanan_is_gunu = %s WHERE id = %s", (is_gunu, siparis_id))
+        conn.commit()
+        
+        # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
+        siva_plan_detay = defaultdict(list) 
+        kalan_kapasite_bugun = 0
+        ihtiyac_index = 0
+        
+        for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
+            kalan_kapasite_bugun = kapasite
+            
+            while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_ihtiyaci):
+                ihtiyac = siva_uretim_ihtiyaci[ihtiyac_index]
+                key = ihtiyac['key']
+                m2_gerekli = ihtiyac['m2']
+                
+                m2_yapilacak = min(m2_gerekli, kalan_kapasite_bugun)
+                
+                siva_plan_detay[gun].append({
+                    'cinsi': key,
+                    'm2': m2_yapilacak
+                })
+                
+                ihtiyac['m2'] -= m2_yapilacak
+                kalan_kapasite_bugun -= m2_yapilacak
+                
+                if ihtiyac['m2'] <= 0:
+                    ihtiyac_index += 1
+                
+            if ihtiyac_index >= len(siva_uretim_ihtiyaci):
+                break 
+        
+        # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
+        bugun = datetime.now().date()
+        sevkiyat_plan_detay = defaultdict(list)
+        for i in range(0, 5): 
+            plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
+            # PostgreSQL'de SELECT sorgusu
+            cur.execute("""
+                SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
+                FROM siparisler 
+                WHERE durum='Bekliyor' AND termin_tarihi = %s
+                ORDER BY termin_tarihi ASC
+            """, (plan_tarihi,))
+            sevkiyatlar = cur.fetchall()
+            
+            if sevkiyatlar:
+                # RealDictCursor zaten sözlük listesi döndürür
+                sevkiyat_plan_detay[plan_tarihi] = sevkiyatlar
+        
+        cur.close()
+        return toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map
+        
+    except Exception as e:
+        print(f"--- KRİTİK HATA LOGU (calculate_planning) ---")
+        print(f"Hata Tipi: {type(e).__name__}")
+        print(f"Hata Mesajı: {str(e)}")
+        # Hata devam etsin ki Render loglarına düşebilsin
+        raise 
 
 # --- 3. ROTALAR (PC Arayüzü ve İşlemler) ---
 
@@ -299,6 +306,7 @@ def index():
     cur = conn.cursor()
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
+    # calculate_planning'de hata yakalama var, burada hata olursa Render loguna düşer
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
     stok_list = []
@@ -316,7 +324,8 @@ def index():
         stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
     
     cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
-    siparisler = cur.fetchall()
+    # Tarih formatı dönüşümü burada gerekli değil, çünkü Jinja2 bunu hallediyor.
+    siparisler = cur.fetchall() 
     next_siparis_kodu = get_next_siparis_kodu(conn)
     today = datetime.now().strftime('%Y-%m-%d')
     cur.close()
@@ -496,56 +505,77 @@ def ayarla_urun_kodu():
 @app.route('/api/stok', methods=['GET'])
 def api_stok_verileri():
     """Mobil görünüm için stok, sipariş ve planlama verilerini JSON olarak döndürür."""
-    # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    # Tüm analiz ve planlama verilerini hesaplar (PostgreSQL bağlantısı ile)
-    toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
-    
-    stok_data = {}
-    deficit_analysis = {}
-
-    for cinsi, kalinlik in VARYANTLAR:
-        key = f"{cinsi} {kalinlik}"
-        stok_data[f"{key} (Ham)"] = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-        stok_data[f"{key} (Sivali)"] = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+    conn = None
+    try: # Hata yakalamayı başlat
+        # Düzeltilmiş bağlantı fonksiyonunu kullanıyoruz
+        conn = get_db_connection()
+        cur = conn.cursor()
         
-        # PostgreSQL'de SUM sorgusu
-        cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
-        bekleyen_m2_raw = cur.fetchone()
+        # Tüm analiz ve planlama verilerini hesaplar (PostgreSQL bağlantısı ile)
+        # calculate_planning içinde hata yakalama mevcut.
+        toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
         
-        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
-        sivali_stok = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
-        ham_stok = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-        sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
-        ham_eksik = max(0, sivali_eksik - ham_stok)
-        
-        if gerekli_siparis_m2 > 0:
-            deficit_analysis[key] = {
-                'sivali_deficit': sivali_eksik,
-                'ham_deficit': ham_eksik,
-                'ham_coverage': max(0, sivali_eksik - max(0, sivali_eksik - ham_stok)) 
-            }
+        stok_data = {}
+        deficit_analysis = {}
 
-    cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
-    siparisler = cur.fetchall()
-    # RealDictCursor zaten sözlük listesi döndürür
-    siparis_listesi = siparisler
+        for cinsi, kalinlik in VARYANTLAR:
+            key = f"{cinsi} {kalinlik}"
+            stok_data[f"{key} (Ham)"] = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
+            stok_data[f"{key} (Sivali)"] = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+            
+            # PostgreSQL'de SUM sorgusu
+            cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
+            bekleyen_m2_raw = cur.fetchone()
+            
+            gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
+            sivali_stok = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+            ham_stok = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
+            sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
+            ham_eksik = max(0, sivali_eksik - ham_stok)
+            
+            if gerekli_siparis_m2 > 0:
+                deficit_analysis[key] = {
+                    'sivali_deficit': sivali_eksik,
+                    'ham_deficit': ham_eksik,
+                    'ham_coverage': max(0, sivali_eksik - max(0, sivali_eksik - ham_stok)) 
+                }
+
+        cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
+        siparisler = cur.fetchall()
+        
+        # Tarih alanlarını JSON uyumlu string'e çevir (KRİTİK DÜZELTME)
+        siparis_listesi = []
+        for s in siparisler:
+            s_dict = dict(s) # RealDictCursor sonucunu normal dict'e çevir
+            # datetime.date nesnelerini string'e çevir
+            if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
+                s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
+            if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
+                s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
+            siparis_listesi.append(s_dict)
+
+        cur.close()
+        conn.close()
+
+        # Mobil arayüzün beklediği tüm veriyi döndür
+        return jsonify({
+            'stok': stok_data,
+            'deficit_analysis': deficit_analysis,
+            'siparisler': siparis_listesi,
+            'toplam_gerekli_siva': toplam_gerekli_siva,
+            'gunluk_siva_m2': gunluk_siva_m2,
+            'siva_plan_detay': dict(siva_plan_detay), 
+            'sevkiyat_plan_detay': dict(sevkiyat_plan_detay) 
+        })
     
-    cur.close()
-    conn.close()
-
-    # Mobil arayüzün beklediği tüm veriyi döndür
-    return jsonify({
-        'stok': stok_data,
-        'deficit_analysis': deficit_analysis,
-        'siparisler': siparis_listesi,
-        'toplam_gerekli_siva': toplam_gerekli_siva,
-        'gunluk_siva_m2': gunluk_siva_m2,
-        'siva_plan_detay': dict(siva_plan_detay), 
-        'sevkiyat_plan_detay': dict(sevkiyat_plan_detay) 
-    })
+    except Exception as e:
+        print(f"--- KRİTİK HATA LOGU (api_stok_verileri) ---")
+        print(f"Hata Tipi: {type(e).__name__}")
+        print(f"Hata Mesajı: {str(e)}")
+        # Tarayıcıya 500 hatası döndür, hata detayını API yanıtına ekle.
+        return jsonify({'error': 'Sunucu Hatası', 'detail': f"API hatası: {str(e)} - Logları Kontrol Edin"}), 500
+    finally:
+        if conn: conn.close()
 
 
 @app.route('/mobil', methods=['GET'])
@@ -565,294 +595,294 @@ HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <title>EPS Panel Yönetimi</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
-        h1, h2, h3 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } input, select, button { width: 100%; margin-bottom: 8px; box-sizing: border-box; } }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; word-wrap: break-word; }
-        th { background-color: #007bff; color: white; }
-        .message { padding: 10px; margin-bottom: 15px; border-radius: 4px; font-weight: bold; }
-        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .form-section { background-color: #e9e9e9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .deficit-ham { color: red; font-weight: bold; } 
-        .deficit-sivali { color: darkred; font-weight: bold; } 
-        button { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        input[type="number"], input[type="text"], input[type="date"], select { padding: 6px; margin-right: 5px; border: 1px solid #ccc; border-radius: 4px; }
-        .kapasite-box { background-color: #ffcc99; padding: 10px; border-radius: 5px; margin-top: 10px; }
-        .plan-header { color: #00a359; }
-        .plan-table td:nth-child(2) { font-weight: bold; }
-        .siparis-tamamlandi { background-color: #e0f7e0; color: green; }
-        .siparis-iptal { background-color: #ffe0e0; color: darkred; }
-        .stok-table th:nth-child(1) { width: 15%; } .stok-table th:nth-child(2) { width: 10%; } .stok-table th:nth-child(3) { width: 10%; } .stok-table th:nth-child(4) { width: 10%; } .stok-table th:nth-child(5) { width: 10%; } .stok-table th:nth-child(6) { width: 10%; }
-        .siparis-table th:nth-child(1) { width: 5%; } .siparis-table th:nth-child(4), .siparis-table th:nth-child(5) { width: 10%; } .siparis-table th:nth-child(7), .siparis-table th:nth-child(8) { width: 10%; } .siparis-table th:nth-child(10) { width: 10%; }
-        
-        /* --- YENİ MOBİL UYUM DÜZENLEMELERİ --- */
-        
-        /* Mobil Cihazlar İçin Tablo Kaydırma */
-        .table-responsive {
-            overflow-x: auto; /* Yatay kaydırmayı etkinleştirir */
-            margin-top: 15px;
-        }
+    <title>EPS Panel Yönetimi</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }
+        h1, h2, h3 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } input, select, button { width: 100%; margin-bottom: 8px; box-sizing: border-box; } }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; word-wrap: break-word; }
+        th { background-color: #007bff; color: white; }
+        .message { padding: 10px; margin-bottom: 15px; border-radius: 4px; font-weight: bold; }
+        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .form-section { background-color: #e9e9e9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .deficit-ham { color: red; font-weight: bold; } 
+        .deficit-sivali { color: darkred; font-weight: bold; } 
+        button { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        input[type="number"], input[type="text"], input[type="date"], select { padding: 6px; margin-right: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        .kapasite-box { background-color: #ffcc99; padding: 10px; border-radius: 5px; margin-top: 10px; }
+        .plan-header { color: #00a359; }
+        .plan-table td:nth-child(2) { font-weight: bold; }
+        .siparis-tamamlandi { background-color: #e0f7e0; color: green; }
+        .siparis-iptal { background-color: #ffe0e0; color: darkred; }
+        .stok-table th:nth-child(1) { width: 15%; } .stok-table th:nth-child(2) { width: 10%; } .stok-table th:nth-child(3) { width: 10%; } .stok-table th:nth-child(4) { width: 10%; } .stok-table th:nth-child(5) { width: 10%; } .stok-table th:nth-child(6) { width: 10%; }
+        .siparis-table th:nth-child(1) { width: 5%; } .siparis-table th:nth-child(4), .siparis-table th:nth-child(5) { width: 10%; } .siparis-table th:nth-child(7), .siparis-table th:nth-child(8) { width: 10%; } .siparis-table th:nth-child(10) { width: 10%; }
+        
+        /* --- YENİ MOBİL UYUM DÜZENLEMELERİ --- */
+        
+        /* Mobil Cihazlar İçin Tablo Kaydırma */
+        .table-responsive {
+            overflow-x: auto; /* Yatay kaydırmayı etkinleştirir */
+            margin-top: 15px;
+        }
 
-        /* Mobil Sipariş Tablosu Genişlik Ayarları */
-        .siparis-table {
-            min-width: 900px; /* Mobil görünümde kaydırmayı zorlamak için minimum genişlik */
-            table-layout: auto; /* Otomatik sütun genişliği */
-        }
-        .siparis-table th, .siparis-table td {
-            white-space: nowrap; /* İçeriğin kaydırılmasını sağlar */
-        }
-        .siparis-table th:nth-child(1) { width: 50px; } /* ID */
-        .siparis-table th:nth-child(2) { width: 100px; } /* Kod */
-        .siparis-table th:nth-child(3) { width: 180px; } /* Ürün (En uzun olan) */
-        .siparis-table th:nth-child(4) { width: 150px; } /* Müşteri */
-        .siparis-table th:nth-child(5) { width: 100px; } /* Sipariş Tarihi */
-        .siparis-table th:nth-child(6) { width: 100px; } /* Termin Tarihi */
-        .siparis-table th:nth-child(7) { width: 80px; } /* Bekleyen M² */
-        .siparis-table th:nth-child(8) { width: 90px; } /* Durum */
-        .siparis-table th:nth-child(9) { width: 120px; } /* Planlanan İş Günü */
-        .siparis-table th:nth-child(10) { width: 160px; } /* İşlem */
-        
-    </style>
-    <script>
-        const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
-        function filterProductCodes() {
-            const cinsi = document.getElementById('cinsi_select').value;
-            const kalinlik = document.getElementById('kalinlik_select').value;
-            const urunKoduSelect = document.getElementById('urun_kodu_select');
-            urunKoduSelect.innerHTML = ''; 
-            const key = cinsi + ' ' + kalinlik;
-            const codes = CINS_TO_BOYALI_MAP[key] || [];
-            if (codes.length > 0) {
-                codes.forEach(code => {
-                    const option = document.createElement('option');
-                    option.value = code;
-                    option.textContent = code;
-                    urunKoduSelect.appendChild(option);
-                });
-            } else {
-                    const option = document.createElement('option');
-                    option.value = '';
-                    option.textContent = 'Kod bulunamadı';
-                    urunKoduSelect.appendChild(option);
-            }
-        }
-        document.addEventListener('DOMContentLoaded', filterProductCodes);
-    </script>
+        /* Mobil Sipariş Tablosu Genişlik Ayarları */
+        .siparis-table {
+            min-width: 900px; /* Mobil görünümde kaydırmayı zorlamak için minimum genişlik */
+            table-layout: auto; /* Otomatik sütun genişliği */
+        }
+        .siparis-table th, .siparis-table td {
+            white-space: nowrap; /* İçeriğin kaydırılmasını sağlar */
+        }
+        .siparis-table th:nth-child(1) { width: 50px; } /* ID */
+        .siparis-table th:nth-child(2) { width: 100px; } /* Kod */
+        .siparis-table th:nth-child(3) { width: 180px; } /* Ürün (En uzun olan) */
+        .siparis-table th:nth-child(4) { width: 150px; } /* Müşteri */
+        .siparis-table th:nth-child(5) { width: 100px; } /* Sipariş Tarihi */
+        .siparis-table th:nth-child(6) { width: 100px; } /* Termin Tarihi */
+        .siparis-table th:nth-child(7) { width: 80px; } /* Bekleyen M² */
+        .siparis-table th:nth-child(8) { width: 90px; } /* Durum */
+        .siparis-table th:nth-child(9) { width: 120px; } /* Planlanan İş Günü */
+        .siparis-table th:nth-child(10) { width: 160px; } /* İşlem */
+        
+    </style>
+    <script>
+        const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
+        function filterProductCodes() {
+            const cinsi = document.getElementById('cinsi_select').value;
+            const kalinlik = document.getElementById('kalinlik_select').value;
+            const urunKoduSelect = document.getElementById('urun_kodu_select');
+            urunKoduSelect.innerHTML = ''; 
+            const key = cinsi + ' ' + kalinlik;
+            const codes = CINS_TO_BOYALI_MAP[key] || [];
+            if (codes.length > 0) {
+                codes.forEach(code => {
+                    const option = document.createElement('option');
+                    option.value = code;
+                    option.textContent = code;
+                    urunKoduSelect.appendChild(option);
+                });
+            } else {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = 'Kod bulunamadı';
+                    urunKoduSelect.appendChild(option);
+            }
+        }
+        document.addEventListener('DOMContentLoaded', filterProductCodes);
+    </script>
 </head>
 <body>
-    <div class="container">
-        <h1>🏭 EPS Panel Üretim ve Sipariş Yönetimi</h1>
-        <p style="font-style: italic;">*Tüm giriş ve çıkışlar Metrekare (m²) cinsindendir.</p>
-        <p style="font-weight: bold; color: #007bff;">
-            Mobil Görüntüleme Adresi: <a href="{{ url_for('mobil_gorunum') }}">/mobil</a>
-        </p>
-        {% if message %}
-            <div class="message {% if 'Hata' in message or 'Yetersiz' in message %}error{% else %}success{% endif %}">{{ message }}</div>
-        {% endif %}
-        <div class="grid">
-            <div class="form-section">
-                <h2>1. Stok Hareketleri (Üretim/Alım/Satış/İptal)</h2>
-                <div class="kapasite-box">
-                    <h3>⚙️ Günlük Sıva Kapasitesi Ayarı</h3>
-                    <form action="/ayarla/kapasite" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
-                        <input type="number" name="kapasite_m2" min="1" required placeholder="M2" value="{{ gunluk_siva_m2 }}" style="width: 80px;">
-                        <span style="margin-right: 10px;">m² / Gün</span>
-                        <button type="submit" style="background-color:#cc8400;">Kapasiteyi Kaydet</button>
-                    </form>
-                </div>
-                <div class="kapasite-box" style="margin-top: 15px; background-color: #d8f5ff;">
-                    <h3>➕ Yeni Ürün Kodu Ekle</h3>
-                    <form action="/ayarla/urun_kodu" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
-                        <input type="text" name="yeni_urun_kodu" required placeholder="Örn: L1709" style="width: 100px;">
-                        <select name="cinsi" required style="width: 150px;">
-                            {% for c in CINSLER %}
-                                {% for k in KALINLIKLAR %}
-                                    {% set key = c + " " + k %}
-                                    <option value="{{ key }}">{{ key }}</option>
-                                {% endfor %}
-                            {% endfor %}
-                        </select>
-                        <button type="submit" style="background-color:#17a2b8;">Kodu Ekle</button>
-                    </form>
-                </div>
-                <hr style="margin-top: 15px; margin-bottom: 15px;">
-                <form action="/islem" method="POST">
-                    <select name="action" required>
-                        <option value="ham_alim">1 - Ham Panel Alımı (Stoğa Ekle)</option>
-                        <option value="siva_uygula">2 - Sıva Uygulama (Ham -> Sıvalı Üretim)</option>
-                        <option value="sat_ham">3 - Ham Panel Satışı</option>
-                        <option value="sat_sivali">4 - Sıvalı Panel Satışı</option>
-                        <option value="iptal_ham_alim">5 - Ham Alımı İptal (Ham Stoktan Çıkar)</option>
-                        <option value="iptal_siva">6 - Sıva İşlemi Geri Al (Sıvalı -> Ham)</option>
-                        <option value="iptal_sat_ham">7 - Ham Satışını Geri Al (Ham Stoğa Ekle)</option>
-                        <option value="iptal_sat_sivali">8 - Sıvalı Satışını Geri Al (Sıvalı Stoğa Ekle)</option>
-                    </select>
-                    <select name="cinsi" required>
-                        {% for c in CINSLER %}
-                            <option value="{{ c }}">{{ c }}</option>
-                        {% endfor %}
-                    </select>
-                    <select name="kalinlik" required>
-                        {% for k in KALINLIKLAR %}
-                            <option value="{{ k }}">{{ k }}</option>
-                        {% endfor %}
-                    </select>
-                    <input type="number" name="m2" min="1" required placeholder="M2" style="width: 80px;">
-                    <button type="submit">İşlemi Kaydet</button>
-                </form>
-            </div>
-            <div class="form-section">
-                <h2>2. Yeni Sipariş Girişi (Oto Kod: {{ next_siparis_kodu }})</h2>
-                <form action="/siparis" method="POST">
-                    <input type="hidden" name="action" value="yeni_siparis">
-                    <input type="text" name="musteri" required placeholder="Müşteri Adı" style="width: 120px;">
-                    <select id="cinsi_select" name="cinsi" required onchange="filterProductCodes()" style="width: 120px;">
-                        {% for c in CINSLER %}
-                            <option value="{{ c }}">{{ c }}</option>
-                        {% endfor %}
-                    </select>
-                    <select id="kalinlik_select" name="kalinlik" required onchange="filterProductCodes()" style="width: 100px;">
-                        {% for k in KALINLIKLAR %}
-                            <option value="{{ k }}">{{ k }}</option>
-                        {% endfor %}
-                    </select>
-                    <select id="urun_kodu_select" name="urun_kodu" required style="width: 100px;">
-                        </select>
-                    <input type="number" name="m2" min="1" required placeholder="M2" style="width: 80px;">
-                    <br><br>
-                    <label>Sipariş Tarihi:</label>
-                    <input type="date" name="siparis_tarihi" value="{{ today }}" required>
-                    <label>Termin Tarihi:</label>
-                    <input type="date" name="termin_tarihi" required>
-                    <button type="submit" style="background-color:#00a359;">Sipariş Ekle</button>
-                </form>
-            </div>
-        </div>
-        <hr>
-        <h2 class="plan-header">🚀 Üretim Planlama Özeti (Kapasite: {{ gunluk_siva_m2 }} m²/gün)</h2>
-        {% if toplam_gerekli_siva > 0 %}
-                       <p style="font-weight: bold; color: darkred;">Mevcut siparişleri karşılamak için toplam Sıvalı M² eksiği: {{ toplam_gerekli_siva }} m²</p>
-        {% else %}
-                       <p style="font-weight: bold; color: green;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor. (Toplam bekleyen sipariş {{(siparisler|selectattr('durum', '==', 'Bekliyor')|map(attribute='bekleyen_m2')|sum)}} m²)</p>
-        {% endif %}
-        <div class="grid">
-            <div class="form-section" style="background-color: #e9fff5;">
-                <h3>Sıva Üretim Planı (Önümüzdeki 5 İş Günü)</h3>
-                <table class="plan-table">
-                    <tr><th>Gün</th><th>Planlanan M²</th></tr>
-                    {% for gun, m2 in siva_plan_detay.items() %}
-                        <tr><td>Gün {{ gun }}</td><td>{{ m2 }} m²</td></tr>
-                    {% else %}
-                        <tr><td colspan="2">Önümüzdeki 5 gün için Sıva ihtiyacı bulunmamaktadır.</td></tr>
-                    {% endfor %}
-                </table>
-            </div>
-            <div class="form-section" style="background-color: #f5f5ff;">
-                <h3>Sevkiyat Planı (Önümüzdeki 5 Takvim Günü)</h3>
-                {% if sevkiyat_plan_detay %}
-                    {% for tarih, sevkiyatlar in sevkiyat_plan_detay.items() %}
-                        <h4 style="margin-top: 10px; margin-bottom: 5px; color: #0056b3;">{{ tarih }} (Toplam: {{ sevkiyatlar|sum(attribute='bekleyen_m2') }} m²)</h4>
-                        {% for sevkiyat in sevkiyatlar %}
-                            <p style="margin: 0 0 3px 10px; font-size: 0.9em;">
-                                - **{{ sevkiyat.urun_kodu }}** ({{ sevkiyat.bekleyen_m2 }} m²) -> Müşteri: {{ sevkiyat.musteri }}
-                            </p>
-                        {% endfor %}
-                    {% endfor %}
-                {% else %}
-                    <p>Önümüzdeki 5 gün terminli sevkiyat bulunmamaktadır.</p>
-                {% endif %}
-            </div>
-        </div>
-        <h2>3. Detaylı Stok Durumu ve Eksik Planlama (M²)</h2>
-        <table class="stok-table">
-            <tr>
-                <th>Cinsi</th>
-                <th>Kalınlık</th>
-                <th>Ham M²</th>
-                <th>Sıvalı M²</th>
-                <th style="background-color: #b0e0e6;">Toplam Bekleyen Sipariş M²</th>
-                <th style="background-color: #ffcccc;">Sıvalı Eksik (Üretilmesi Gereken M²)</th>
-                <th style="background-color: #f08080;">Ham Eksik (Ham Alımı Gereken M²)</th>
-            </tr>
-            {% for stok in stok_list %}
-            <tr>
-                <td>{{ stok.cinsi }}</td>
-                <td>{{ stok.kalinlik }}</td>
-                <td>{{ stok.ham_m2 }}</td>
-                <td>{{ stok.sivali_m2 }}</td>
-                <td>{{ stok.gerekli_siparis_m2 }}</td>
-                <td class="{% if stok.sivali_eksik > 0 %}deficit-sivali{% endif %}">{{ stok.sivali_eksik }}</td>
-                <td class="{% if stok.ham_eksik > 0 %}deficit-ham{% endif %}">{{ stok.ham_eksik }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        <h2 style="margin-top: 30px;">4. Sipariş Listesi</h2>
-        <div class="table-responsive">
-        <table class="siparis-table">
-            <tr>
-                <th>ID</th>
-                <th>Kod</th>
-                <th>Ürün</th>
-                <th>Müşteri</th>
-                <th>Sipariş Tarihi</th>
-                <th>Termin Tarihi</th>
-                <th>Bekleyen M²</th>
-                <th>Durum</th>
-                <th>Planlanan İş Günü (Sıva)</th>
-                <th>İşlem</th>
-            </tr>
-            {% for siparis in siparisler %}
-            <tr class="{{ 'siparis-tamamlandi' if siparis.durum == 'Tamamlandi' else ('siparis-iptal' if siparis.durum == 'Iptal' else '') }}">
-                <td>{{ siparis.id }}</td>
-                <td>{{ siparis.siparis_kodu }}</td>
-                <td>{{ siparis.urun_kodu }} ({{ siparis.cinsi }} {{ siparis.kalinlik }})</td>
-                <td>{{ siparis.musteri }}</td>
-                <td>{{ siparis.siparis_tarihi }}</td>
-                <td>{{ siparis.termin_tarihi }}</td>
-                <td>{{ siparis.bekleyen_m2 }}</td>
-                <td>{{ siparis.durum }}</td>
-                <td>
-                    {% if siparis.durum == 'Bekliyor' %}
-                        {% if siparis.planlanan_is_gunu == 0 %}
-                            <span style="color:green; font-weight:bold;">Hemen Stoktan (0)</span>
-                        {% elif siparis.planlanan_is_gunu > 0 %}
-                            <span style="color:darkorange; font-weight:bold;">Gün {{ siparis.planlanan_is_gunu }}</span>
-                        {% else %}
-                            Planlanamaz (Kapasite Yok)
-                        {% endif %}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-                <td>
-                    {% if siparis.durum == 'Bekliyor' %}
-                        <form action="/siparis" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="action" value="tamamla_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: green; padding: 4px 8px;">Tamamla</button>
-                        </form>
-                        <form action="/siparis" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="action" value="iptal_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: darkred; padding: 4px 8px;">İptal Et</button>
-                        </form>
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-        </div>
-    </div>
+    <div class="container">
+        <h1>🏭 EPS Panel Üretim ve Sipariş Yönetimi</h1>
+        <p style="font-style: italic;">*Tüm giriş ve çıkışlar Metrekare (m²) cinsindendir.</p>
+        <p style="font-weight: bold; color: #007bff;">
+            Mobil Görüntüleme Adresi: <a href="{{ url_for('mobil_gorunum') }}">/mobil</a>
+        </p>
+        {% if message %}
+            <div class="message {% if 'Hata' in message or 'Yetersiz' in message %}error{% else %}success{% endif %}">{{ message }}</div>
+        {% endif %}
+        <div class="grid">
+            <div class="form-section">
+                <h2>1. Stok Hareketleri (Üretim/Alım/Satış/İptal)</h2>
+                <div class="kapasite-box">
+                    <h3>⚙️ Günlük Sıva Kapasitesi Ayarı</h3>
+                    <form action="/ayarla/kapasite" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
+                        <input type="number" name="kapasite_m2" min="1" required placeholder="M2" value="{{ gunluk_siva_m2 }}" style="width: 80px;">
+                        <span style="margin-right: 10px;">m² / Gün</span>
+                        <button type="submit" style="background-color:#cc8400;">Kapasiteyi Kaydet</button>
+                    </form>
+                </div>
+                <div class="kapasite-box" style="margin-top: 15px; background-color: #d8f5ff;">
+                    <h3>➕ Yeni Ürün Kodu Ekle</h3>
+                    <form action="/ayarla/urun_kodu" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
+                        <input type="text" name="yeni_urun_kodu" required placeholder="Örn: L1709" style="width: 100px;">
+                        <select name="cinsi" required style="width: 150px;">
+                            {% for c in CINSLER %}
+                                {% for k in KALINLIKLAR %}
+                                    {% set key = c + " " + k %}
+                                    <option value="{{ key }}">{{ key }}</option>
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                        <button type="submit" style="background-color:#17a2b8;">Kodu Ekle</button>
+                    </form>
+                </div>
+                <hr style="margin-top: 15px; margin-bottom: 15px;">
+                <form action="/islem" method="POST">
+                    <select name="action" required>
+                        <option value="ham_alim">1 - Ham Panel Alımı (Stoğa Ekle)</option>
+                        <option value="siva_uygula">2 - Sıva Uygulama (Ham -> Sıvalı Üretim)</option>
+                        <option value="sat_ham">3 - Ham Panel Satışı</option>
+                        <option value="sat_sivali">4 - Sıvalı Panel Satışı</option>
+                        <option value="iptal_ham_alim">5 - Ham Alımı İptal (Ham Stoktan Çıkar)</option>
+                        <option value="iptal_siva">6 - Sıva İşlemi Geri Al (Sıvalı -> Ham)</option>
+                        <option value="iptal_sat_ham">7 - Ham Satışını Geri Al (Ham Stoğa Ekle)</option>
+                        <option value="iptal_sat_sivali">8 - Sıvalı Satışını Geri Al (Sıvalı Stoğa Ekle)</option>
+                    </select>
+                    <select name="cinsi" required>
+                        {% for c in CINSLER %}
+                            <option value="{{ c }}">{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="kalinlik" required>
+                        {% for k in KALINLIKLAR %}
+                            <option value="{{ k }}">{{ k }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="number" name="m2" min="1" required placeholder="M2" style="width: 80px;">
+                    <button type="submit">İşlemi Kaydet</button>
+                </form>
+            </div>
+            <div class="form-section">
+                <h2>2. Yeni Sipariş Girişi (Oto Kod: {{ next_siparis_kodu }})</h2>
+                <form action="/siparis" method="POST">
+                    <input type="hidden" name="action" value="yeni_siparis">
+                    <input type="text" name="musteri" required placeholder="Müşteri Adı" style="width: 120px;">
+                    <select id="cinsi_select" name="cinsi" required onchange="filterProductCodes()" style="width: 120px;">
+                        {% for c in CINSLER %}
+                            <option value="{{ c }}">{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="kalinlik_select" name="kalinlik" required onchange="filterProductCodes()" style="width: 100px;">
+                        {% for k in KALINLIKLAR %}
+                            <option value="{{ k }}">{{ k }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="urun_kodu_select" name="urun_kodu" required style="width: 100px;">
+                        </select>
+                    <input type="number" name="m2" min="1" required placeholder="M2" style="width: 80px;">
+                    <br><br>
+                    <label>Sipariş Tarihi:</label>
+                    <input type="date" name="siparis_tarihi" value="{{ today }}" required>
+                    <label>Termin Tarihi:</label>
+                    <input type="date" name="termin_tarihi" required>
+                    <button type="submit" style="background-color:#00a359;">Sipariş Ekle</button>
+                </form>
+            </div>
+        </div>
+        <hr>
+        <h2 class="plan-header">🚀 Üretim Planlama Özeti (Kapasite: {{ gunluk_siva_m2 }} m²/gün)</h2>
+        {% if toplam_gerekli_siva > 0 %}
+                       <p style="font-weight: bold; color: darkred;">Mevcut siparişleri karşılamak için toplam Sıvalı M² eksiği: {{ toplam_gerekli_siva }} m²</p>
+        {% else %}
+                       <p style="font-weight: bold; color: green;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor. (Toplam bekleyen sipariş {{(siparisler|selectattr('durum', '==', 'Bekliyor')|map(attribute='bekleyen_m2')|sum)}} m²)</p>
+        {% endif %}
+        <div class="grid">
+            <div class="form-section" style="background-color: #e9fff5;">
+                <h3>Sıva Üretim Planı (Önümüzdeki 5 İş Günü)</h3>
+                <table class="plan-table">
+                    <tr><th>Gün</th><th>Planlanan M²</th></tr>
+                    {% for gun, m2 in siva_plan_detay.items() %}
+                        <tr><td>Gün {{ gun }}</td><td>{{ m2 }} m²</td></tr>
+                    {% else %}
+                        <tr><td colspan="2">Önümüzdeki 5 gün için Sıva ihtiyacı bulunmamaktadır.</td></tr>
+                    {% endfor %}
+                </table>
+            </div>
+            <div class="form-section" style="background-color: #f5f5ff;">
+                <h3>Sevkiyat Planı (Önümüzdeki 5 Takvim Günü)</h3>
+                {% if sevkiyat_plan_detay %}
+                    {% for tarih, sevkiyatlar in sevkiyat_plan_detay.items() %}
+                        <h4 style="margin-top: 10px; margin-bottom: 5px; color: #0056b3;">{{ tarih }} (Toplam: {{ sevkiyatlar|sum(attribute='bekleyen_m2') }} m²)</h4>
+                        {% for sevkiyat in sevkiyatlar %}
+                            <p style="margin: 0 0 3px 10px; font-size: 0.9em;">
+                                - **{{ sevkiyat.urun_kodu }}** ({{ sevkiyat.bekleyen_m2 }} m²) -> Müşteri: {{ sevkiyat.musteri }}
+                            </p>
+                        {% endfor %}
+                    {% endfor %}
+                {% else %}
+                    <p>Önümüzdeki 5 gün terminli sevkiyat bulunmamaktadır.</p>
+                {% endif %}
+            </div>
+        </div>
+        <h2>3. Detaylı Stok Durumu ve Eksik Planlama (M²)</h2>
+        <table class="stok-table">
+            <tr>
+                <th>Cinsi</th>
+                <th>Kalınlık</th>
+                <th>Ham M²</th>
+                <th>Sıvalı M²</th>
+                <th style="background-color: #b0e0e6;">Toplam Bekleyen Sipariş M²</th>
+                <th style="background-color: #ffcccc;">Sıvalı Eksik (Üretilmesi Gereken M²)</th>
+                <th style="background-color: #f08080;">Ham Eksik (Ham Alımı Gereken M²)</th>
+            </tr>
+            {% for stok in stok_list %}
+            <tr>
+                <td>{{ stok.cinsi }}</td>
+                <td>{{ stok.kalinlik }}</td>
+                <td>{{ stok.ham_m2 }}</td>
+                <td>{{ stok.sivali_m2 }}</td>
+                <td>{{ stok.gerekli_siparis_m2 }}</td>
+                <td class="{% if stok.sivali_eksik > 0 %}deficit-sivali{% endif %}">{{ stok.sivali_eksik }}</td>
+                <td class="{% if stok.ham_eksik > 0 %}deficit-ham{% endif %}">{{ stok.ham_eksik }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        <h2 style="margin-top: 30px;">4. Sipariş Listesi</h2>
+        <div class="table-responsive">
+        <table class="siparis-table">
+            <tr>
+                <th>ID</th>
+                <th>Kod</th>
+                <th>Ürün</th>
+                <th>Müşteri</th>
+                <th>Sipariş Tarihi</th>
+                <th>Termin Tarihi</th>
+                <th>Bekleyen M²</th>
+                <th>Durum</th>
+                <th>Planlanan İş Günü (Sıva)</th>
+                <th>İşlem</th>
+            </tr>
+            {% for siparis in siparisler %}
+            <tr class="{{ 'siparis-tamamlandi' if siparis.durum == 'Tamamlandi' else ('siparis-iptal' if siparis.durum == 'Iptal' else '') }}">
+                <td>{{ siparis.id }}</td>
+                <td>{{ siparis.siparis_kodu }}</td>
+                <td>{{ siparis.urun_kodu }} ({{ siparis.cinsi }} {{ siparis.kalinlik }})</td>
+                <td>{{ siparis.musteri }}</td>
+                <td>{{ siparis.siparis_tarihi }}</td>
+                <td>{{ siparis.termin_tarihi }}</td>
+                <td>{{ siparis.bekleyen_m2 }}</td>
+                <td>{{ siparis.durum }}</td>
+                <td>
+                    {% if siparis.durum == 'Bekliyor' %}
+                        {% if siparis.planlanan_is_gunu == 0 %}
+                            <span style="color:green; font-weight:bold;">Hemen Stoktan (0)</span>
+                        {% elif siparis.planlanan_is_gunu > 0 %}
+                            <span style="color:darkorange; font-weight:bold;">Gün {{ siparis.planlanan_is_gunu }}</span>
+                        {% else %}
+                            Planlanamaz (Kapasite Yok)
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if siparis.durum == 'Bekliyor' %}
+                        <form action="/siparis" method="POST" style="display:inline-block;">
+                            <input type="hidden" name="action" value="tamamla_siparis">
+                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                            <button type="submit" style="background-color: green; padding: 4px 8px;">Tamamla</button>
+                        </form>
+                        <form action="/siparis" method="POST" style="display:inline-block;">
+                            <input type="hidden" name="action" value="iptal_siparis">
+                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                            <button type="submit" style="background-color: darkred; padding: 4px 8px;">İptal Et</button>
+                        </form>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        </div>
+    </div>
 </body>
 </html>
 '''
