@@ -23,14 +23,15 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # JSON dosyaları hala yerel diskte tutuluyor.
 KAPASITE_FILE = 'kapasite.json' 
-KALINLIK_FILE = 'kalinliklar.json' # YENİ: Kalınlıkları tutmak için dosya
+KALINLIK_FILE = 'kalinliklar.json' # Kalınlıkları tutmak için dosya
+CINS_FILE = 'cin_listesi.json' # Cins listesini dinamik tutmak için dosya
 # Önbellekleme (caching) sorunlarını azaltmak için ayar.
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 
 
 # --- 0. SABİT TANIMLAMALAR VE DİNAMİK YÜKLEME ---
 # Varsayılanlar
 DEFAULT_KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
-CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
+DEFAULT_CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
 
 # --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ ---
 # Hata Düzeltme: load_data ve save_data fonksiyonları, 
@@ -49,6 +50,14 @@ def load_data(filename):
     if filename == KAPASITE_FILE:
         return {"gunluk_siva_m2": 600}
     
+    # Cins listesini yükle/oluştur
+    if filename == CINS_FILE:
+        if not os.path.exists(CINS_FILE):
+             save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
+        # load_data fonksiyonunu çağırırken recursive loop'a girmemek için dosyadan direkt yükleme yapıyoruz.
+        with open(CINS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
     if filename == 'urun_kodlari.json':
         # Varsayılan urun_kodlari.json verisi
         return {
@@ -83,9 +92,18 @@ def load_kalinliklar():
 def save_kalinliklar(kalinliklar):
     """Kalınlık listesini JSON'a kaydeder."""
     save_data({'kalinliklar': kalinliklar}, KALINLIK_FILE)
+
+def load_cinsler():
+    """Cins listesini JSON'dan yükler."""
+    return load_data(CINS_FILE).get('cinsler', DEFAULT_CINSLER)
+
+def save_cinsler(cinsler):
+    """Cins listesini JSON'a kaydeder."""
+    save_data({'cinsler': cinsler}, CINS_FILE)
     
-# Dinamik olarak yükle (Uygulama başlatıldığında güncel kalınlıklar yüklenir)
+# Dinamik olarak yükle (Uygulama başlatıldığında güncel kalınlıklar ve cinsler yüklenir)
 KALINLIKLAR = load_kalinliklar()
+CINSLER = load_cinsler() # YENİ: Cinsler dinamik olarak yüklenir
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
 
 # Veri haritalarını yükle
@@ -137,9 +155,10 @@ def init_db():
             ); 
         """)
 
-        # YENİ: Kalınlıklar değişebileceği için VARYANTLAR'ı yeniden hesapla
-        global KALINLIKLAR, VARYANTLAR
+        # YENİ: Cinsler ve Kalınlıklar değişebileceği için VARYANTLAR'ı yeniden hesapla
+        global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
+        CINSLER = load_cinsler()
         VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
         
         # Varsayılan stok girişleri (EĞER YOKSA ekle)
@@ -164,6 +183,8 @@ with app.app_context():
         save_data({"gunluk_siva_m2": 600}, KAPASITE_FILE)
     if not os.path.exists('urun_kodlari.json'):
         save_data(CINS_TO_BOYALI_MAP, 'urun_kodlari.json')
+    if not os.path.exists(CINS_FILE): # Cins dosyasının varlığını kontrol et
+        save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
 
 
 # --- 2. YARDIMCI FONKSİYONLAR VE PLANLAMA MANTIĞI ---
@@ -206,6 +227,7 @@ def calculate_planning(conn):
         cur.execute("SELECT cinsi, kalinlik, asama, m2 FROM stok")
         stok_raw = cur.fetchall()
         
+        # Stokları ham ve sıvalı olarak map'le (Tuple key: (cinsi, kalinlik))
         for row in stok_raw:
             key = (row['cinsi'], row['kalinlik'])
             if key not in stok_map: stok_map[key] = {'Ham': 0, 'Sivali': 0}
@@ -223,15 +245,25 @@ def calculate_planning(conn):
         siva_uretim_ihtiyaci = [] 
         toplam_gerekli_siva = 0 
         planlama_sonuclari = {} 
+        # Mevcut sıvalı stoğun bir kopyasını al, siparişleri karşılarken bu kopyayı azaltacağız
         temp_stok_sivali = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
         
         for siparis in bekleyen_siparisler:
             key = (siparis['cinsi'], siparis['kalinlik'])
-            stok_sivali = temp_stok_sivali.get(key, 0)
+            stok_sivali_available = temp_stok_sivali.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
-            eksik_sivali = max(0, gerekli_m2 - stok_sivali)
-            temp_stok_sivali[key] = max(0, stok_sivali - gerekli_m2) 
+            
+            # 1. Sıvalı Stoku Tüket
+            karsilanan_sivali = min(gerekli_m2, stok_sivali_available)
+            kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
+            
+            # Sıvalı stoğu azalt
+            temp_stok_sivali[key] = stok_sivali_available - karsilanan_sivali
 
+            # 2. Üretim İhtiyacını Hesapla (Ham Stoku Dikkate Almadan, sadece Sıva)
+            # Bu, sıvalı stoğu tükettikten sonra kalan ihtiyacın tamamıdır.
+            eksik_sivali = kalan_ihtiyac 
+            
             if eksik_sivali > 0:
                 toplam_gerekli_siva += eksik_sivali
                 siva_uretim_ihtiyaci.append({
@@ -240,7 +272,8 @@ def calculate_planning(conn):
                 })
                 
             is_gunu = math.ceil(toplam_gerekli_siva / kapasite) if kapasite > 0 else -1
-            planlama_sonuclari[siparis['id']] = is_gunu if eksik_sivali > 0 else 0
+            planlama_sonuclari[siparis['id']] = is_gunu if toplam_gerekli_siva > 0 else 0 
+            # NOT: is_gunu hesaplaması birikimli olduğu için ilk sipariş 1, ikinci sipariş 2... gibi ilerler.
 
         # Hesaplanan iş günlerini veritabanına kaydet
         for siparis_id, is_gunu in planlama_sonuclari.items():
@@ -312,24 +345,30 @@ def index():
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
     
-    # YENİ: Kalınlıklar değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
-    global KALINLIKLAR, VARYANTLAR
+    # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+    global KALINLIKLAR, CINSLER, VARYANTLAR
     KALINLIKLAR = load_kalinliklar()
+    CINSLER = load_cinsler()
     VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
     
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
     stok_list = []
     for cinsi, kalinlik in VARYANTLAR:
-        ham_m2 = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
-        sivali_m2 = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
+        key = (cinsi, kalinlik)
+        ham_m2 = stok_map.get(key, {}).get('Ham', 0)
+        sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
         cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
         bekleyen_m2_raw = cur.fetchone()
         
-        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
+        # KRİTİK DÜZELTME: bekleyen_m2_raw['toplam_m2'] değeri None ise 0 olarak kabul et.
+        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
+        
+        # Eksik hesaplama mantığı
         sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
         ham_eksik = max(0, sivali_eksik - ham_m2)
+        
         stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
     
     cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
@@ -449,6 +488,7 @@ def handle_siparis_islem():
             # Tüm form anahtarlarını kontrol ediyoruz.
             all_keys = list(request.form.keys())
             # Sipariş satırlarının indekslerini buluyoruz.
+            # Not: Cinsi/kalinlik bilgisi artık direkt formdan gelmiyor, urun_kodu ile eşleşiyor.
             indices = sorted(list(set([int(k.split('_')[-1]) for k in all_keys if k.startswith('urun_kodu_')])))
 
             for i in indices:
@@ -546,48 +586,79 @@ def ayarla_kapasite():
     except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
     return redirect(url_for('index', message=message))
 
-# YENİ ROTA: Zemin Kalınlığı Ekleme
+# YENİ ROTA: Zemin Kalınlığı ve Cins Ekleme
 @app.route('/ayarla/kalinlik', methods=['POST'])
 def ayarla_kalinlik():
-    """Yeni bir zemin kalınlığı ekler ve stok tablosuna varsayılan girişleri yapar."""
-    global KALINLIKLAR
+    """Yeni bir kalınlık ve/veya cins ekler ve stok tablosuna varsayılan girişleri yapar."""
+    global KALINLIKLAR, CINSLER
     yeni_kalinlik_input = request.form['yeni_kalinlik'].strip()
+    yeni_cins_input = request.form['yeni_cins'].strip().upper() # Yeni Cins alanı
     message = ""
     conn = None
     try:
-        if not yeni_kalinlik_input: raise ValueError("Kalınlık boş olamaz.")
+        if not yeni_kalinlik_input or not yeni_cins_input: 
+            raise ValueError("Cins ve Kalınlık alanları boş olamaz.")
         
-        # '1,1', '1.1' veya '10' gibi girdileri temiz ve standart bir formata getir
+        # 1. Kalınlık Formatını Hazırla (CM Ekleme)
         temp_kalinlik = yeni_kalinlik_input.replace(',', '.').upper()
-        
-        # Eğer 'CM' ile bitmiyorsa, ekle. Örn: 1.1 -> 1.1 CM, 10 -> 10 CM
         if not temp_kalinlik.endswith(' CM'):
             yeni_kalinlik = temp_kalinlik + ' CM'
         else:
             yeni_kalinlik = temp_kalinlik
-        
-        # Aynı kalınlık zaten varsa
-        if yeni_kalinlik in KALINLIKLAR: 
-            message = f"❌ Hata: Kalınlık **{yeni_kalinlik}** zaten mevcut."
-            return redirect(url_for('index', message=message))
 
-        # Kalınlıklar listesini güncelle
-        KALINLIKLAR.append(yeni_kalinlik)
-        save_kalinliklar(KALINLIKLAR)
-        
-        # Veritabanına stok kayıtlarını ekle
+        # 2. Cinsi Ekle (Eğer Mevcut Değilse)
+        yeni_cins = yeni_cins_input
+        if yeni_cins not in CINSLER:
+            CINSLER.append(yeni_cins)
+            save_cinsler(CINSLER)
+            cins_mesaji = f"Yeni Cins **{yeni_cins}** eklendi."
+        else:
+            cins_mesaji = f"Mevcut Cins **{yeni_cins}** kullanıldı."
+
+        # 3. Kalınlığı Ekle (Eğer Mevcut Değilse)
+        if yeni_kalinlik not in KALINLIKLAR: 
+            KALINLIKLAR.append(yeni_kalinlik)
+            save_kalinliklar(KALINLIKLAR)
+            kalinlik_mesaji = f"Yeni Kalınlık **{yeni_kalinlik}** eklendi."
+        else:
+            kalinlik_mesaji = f"Mevcut Kalınlık **{yeni_kalinlik}** kullanıldı."
+
+        # 4. Veritabanına Stok Kaydını Ekle (Yeni Kombinasyon için)
         conn = get_db_connection()
         cur = conn.cursor()
-        for cinsi in CINSLER:
-            for asama in ['Ham', 'Sivali']:
+        
+        # Yeni eklenen kalınlık veya cins için tüm kombinasyonları kontrol edip
+        # henüz veritabanında olmayanları ekliyoruz. 
+        # Yeni bir kalınlık geldiğinde (örn. 5 CM), tüm mevcut cinsler (BAROK, YATAY TAŞ...) için 
+        # 5 CM'lik stok satırları (Ham/Sıvalı) otomatik oluşur.
+        
+        updated_cinsler = load_cinsler()
+        updated_kalinliklar = load_kalinliklar()
+        
+        # Tüm olası kombinasyonları döngüye al
+        new_variants = []
+        if yeni_cins == yeni_cins_input: # Yeni cins eklendiyse, sadece bu cinsin tüm kalınlıklarını ekle
+             for k in updated_kalinliklar:
+                 new_variants.append((yeni_cins, k))
+        
+        if yeni_kalinlik == yeni_kalinlik: # Yeni kalınlık eklendiyse, bu kalınlığın tüm mevcut cinslerini ekle
+             for c in updated_cinsler:
+                 new_variants.append((c, yeni_kalinlik))
+        
+        # Benzersiz kombinasyonları al
+        unique_new_variants = list(set(new_variants))
+        
+        # Veritabanına ekle
+        for c, k in unique_new_variants:
+             for asama in ['Ham', 'Sivali']:
                 cur.execute("""
                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
                     VALUES (%s, %s, %s, %s) 
                     ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
-                """, (cinsi, yeni_kalinlik, asama, 0))
+                """, (c, k, asama, 0))
         
         conn.commit()
-        message = f"✅ Yeni kalınlık **{yeni_kalinlik}** başarıyla eklendi ve stok kayıtları oluşturuldu."
+        message = f"✅ Kombinasyon **{yeni_cins} {yeni_kalinlik}** başarıyla hazırlandı. ({cins_mesaji} / {kalinlik_mesaji})"
 
     except ValueError as e: 
         message = f"❌ Giriş Hatası: {str(e)}"
@@ -631,9 +702,10 @@ def temizle_veritabani():
         # Stokları sil
         cur.execute("DELETE FROM stok")
         
-        # YENİ: Kalınlıklar değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
-        global KALINLIKLAR, VARYANTLAR
+        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+        global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
+        CINSLER = load_cinsler()
         VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
         
         # Sıfır miktar ile varsayılan stokları yeniden ekle (init_db mantığı)
@@ -664,9 +736,10 @@ def api_stok_verileri():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # YENİ: Kalınlıklar değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
-        global KALINLIKLAR, VARYANTLAR
+        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
+        global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
+        CINSLER = load_cinsler()
         VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
         
         toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
@@ -682,7 +755,7 @@ def api_stok_verileri():
             cur.execute(""" SELECT SUM(bekleyen_m2) as toplam_m2 FROM siparisler WHERE durum='Bekliyor' AND cinsi=%s AND kalinlik=%s """, (cinsi, kalinlik))
             bekleyen_m2_raw = cur.fetchone()
             
-            gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] else 0
+            gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2'] if bekleyen_m2_raw and bekleyen_m2_raw['toplam_m2'] is not None else 0
             sivali_stok = stok_map.get((cinsi, kalinlik), {}).get('Sivali', 0)
             ham_stok = stok_map.get((cinsi, kalinlik), {}).get('Ham', 0)
             sivali_eksik = max(0, gerekli_siparis_m2 - sivali_stok)
@@ -986,13 +1059,14 @@ HTML_TEMPLATE = '''
                         </form>
                     </div>
                     
-                    <!-- YENİ: Kalınlık Ekleme Formu -->
+                    <!-- YENİ: Kalınlık ve Cins Ekleme Formu -->
                     <div class="kapasite-box" style="margin-top: 15px; background-color: #ffe0b2;">
-                        <h3>📏 Yeni Zemin Kalınlığı Ekle</h3>
+                        <h3>📏 Yeni Cins/Kalınlık Ekle</h3>
                         <form action="/ayarla/kalinlik" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
-                            <input type="text" name="yeni_kalinlik" required placeholder="Örn: 1.1 veya 10" style="width: 120px;">
-                            <span style="margin-right: 10px;">CM (Otomatik Eklenir)</span>
-                            <button type="submit" style="background-color:#e65100;">Kalınlık Ekle</button>
+                            <input type="text" name="yeni_cins" required placeholder="Yeni Cins (Örn: LBX)" style="width: 100px;">
+                            <input type="text" name="yeni_kalinlik" required placeholder="Kalınlık (Örn: 1.5)" style="width: 100px;">
+                            <span style="margin-right: 10px;">CM (Otomatik)</span>
+                            <button type="submit" style="background-color:#e65100;">Ekle</button>
                         </form>
                     </div>
                     
