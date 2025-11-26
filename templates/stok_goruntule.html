@@ -320,17 +320,20 @@
             // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
             let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Sıvalı Eksik</th><th>Ham Eksik</th></tr>';
             
-            // Sıralanmış anahtarlar
+            // --- KRİTİK HATA DÜZELTİLDİ: Sadece string metotlarını string'ler üzerinde çağırıyoruz.
             const sortedKeys = Object.keys(stokData).sort((a, b) => {
-                // Parantez içindeki kısmı ayırarak sıralama yapar
-                const [cinsiA, asamaA] = [a.substring(0, a.lastIndexOf(' (')).trim(), a.substring(a.lastIndexOf('(') + 1, a.lastIndexOf(')').trim())];
-                const [cinsiB, asamaB] = [b.substring(0, b.lastIndexOf(' (')).trim(), b.substring(b.lastIndexOf('(') + 1, b.lastIndexOf(')').trim())];
+                const keyA = a.substring(0, a.lastIndexOf(' (')).trim();
+                const asamaA = a.substring(a.lastIndexOf('(') + 1, a.lastIndexOf(')'));
                 
-                if (cinsiA !== cinsiB) return cinsiA.localeCompare(cinsiB);
+                const keyB = b.substring(0, b.lastIndexOf(' (')).trim();
+                const asamaB = b.substring(b.lastIndexOf('(') + 1, b.lastIndexOf(')'));
+                
+                if (keyA !== keyB) return keyA.localeCompare(keyB);
                 
                 const orderMap = {'Ham': 0, 'Sivali': 1};
                 return orderMap[asamaA] - orderMap[asamaB];
             });
+            // --- KRİTİK HATA DÜZELTİLDİ SONU ---
             
             sortedKeys.forEach(key => {
                 const value = stokData[key];
