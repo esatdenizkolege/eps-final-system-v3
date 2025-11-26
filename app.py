@@ -297,16 +297,14 @@ def calculate_planning(conn):
         conn.commit()
         
         # --- YENİ KISIM: Kapasiteyi Ürün Bazında Dağıtma ---
-        # calculate_planning içindeki siva_uretim_ihtiyaci listesinin güncel (toplanmış) hali kullanılır
         
-        # Ürün bazlı ihtiyaçları (sipariş sırasına göre) yeniden sırala
-        # Aynı ürüne ait ihtiyaçları yeniden sipariş sırasına göre dizmek zor olduğu için, 
         # sipariş listesinin sırasını koruyan, ama sadece ihtiyacı olanları içeren yeni bir liste oluşturalım.
         
         siva_uretim_sirasli_ihtiyac = []
         temp_sivali_stok_kopyasi = {k: v.get('Sivali', 0) for k, v in stok_map.items()}
 
         for siparis in bekleyen_siparisler:
+            # Sipariş tablosundan gelen verinin temizlendiği varsayılır.
             key = (siparis['cinsi'], siparis['kalinlik'])
             stok_sivali_available = temp_sivali_stok_kopyasi.get(key, 0)
             gerekli_m2 = siparis['bekleyen_m2']
@@ -558,14 +556,17 @@ def handle_siparis_islem():
                         siparis_kodu = get_next_siparis_kodu(conn)
                         
                         # Ürün kodundan cinsi ve kalınlığı ayrıştır
-                        # CINS_TO_BOYALI_MAP'in global olarak güncel olduğu varsayılır
                         global CINS_TO_BOYALI_MAP
                         cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
                         if not cins_kalinlik_key:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
                         
                         # Kalınlıklar virgüllü olabilir (örn: 1.1 CM)
-                        cinsi, kalinlik = cins_kalinlik_key.rsplit(' ', 1) 
+                        cinsi_raw, kalinlik_raw = cins_kalinlik_key.rsplit(' ', 1) 
+                        
+                        # *** NİHAİ KRİTİK DÜZELTME: Veritabanına yazmadan önce temizle ve büyük harfe çevir ***
+                        cinsi = cinsi_raw.strip().upper() 
+                        kalinlik = kalinlik_raw.strip().upper() 
                         
                         cur.execute(""" INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, bekleyen_m2, durum, planlanan_is_gunu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """, 
                                     (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, m2, 'Bekliyor', 0))
@@ -594,8 +595,12 @@ def handle_siparis_islem():
             if not cins_kalinlik_key:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
                     
-            yeni_cinsi, yeni_kalinlik = cins_kalinlik_key.rsplit(' ', 1)
+            yeni_cinsi_raw, yeni_kalinlik_raw = cins_kalinlik_key.rsplit(' ', 1)
             
+            # Veritabanına yazmadan önce temizle ve büyük harfe çevir
+            yeni_cinsi = yeni_cinsi_raw.strip().upper()
+            yeni_kalinlik = yeni_kalinlik_raw.strip().upper()
+
             cur.execute("""
                 UPDATE siparisler SET 
                 urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s 
