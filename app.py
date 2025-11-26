@@ -418,14 +418,14 @@ def index():
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
-        # *** KRİTİK SORGULAMA DÜZELTMESİ (V4 - Nihai Güçlendirme) ***
-        # PostgreSQL'e, hem kolonu hem de Python'dan gelen değişkeni aynı anda temizleyerek eşleşmeyi zorluyoruz.
+        # *** KRİTİK SORGULAMA DÜZELTMESİ (V8 - Doğrudan Eşleşme) ***
+        # data_repair rotası veriyi zaten temizlediği için, double-cleaning hatasını önlemek amacıyla sorgu basitleştirildi.
         cur.execute(""" 
             SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
             FROM siparisler 
             WHERE durum='Bekliyor' 
-            AND TRIM(UPPER(cinsi)) = TRIM(UPPER(%s)) 
-            AND TRIM(UPPER(kalinlik)) = TRIM(UPPER(%s)) 
+            AND cinsi = %s 
+            AND kalinlik = %s 
         """, (cinsi, kalinlik))
         
         bekleyen_m2_raw = cur.fetchone()
@@ -880,13 +880,13 @@ def api_stok_verileri():
             stok_data[f"{key} (Ham)"] = stok_map.get(stok_key, {}).get('Ham', 0)
             stok_data[f"{key} (Sivali)"] = stok_map.get(stok_key, {}).get('Sivali', 0)
             
-            # *** KRİTİK SORGULAMA DÜZELTMESİ (V4 - Nihai Güçlendirme) ***
+            # *** KRİTİK SORGULAMA DÜZELTMESİ (V8 - Doğrudan Eşleşme) ***
             cur.execute(""" 
                 SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
                 FROM siparisler 
                 WHERE durum='Bekliyor' 
-                AND TRIM(UPPER(cinsi)) = TRIM(UPPER(%s)) 
-                AND TRIM(UPPER(kalinlik)) = TRIM(UPPER(%s)) 
+                AND cinsi = %s 
+                AND kalinlik = %s 
             """, (cinsi, kalinlik))
             
             bekleyen_m2_raw = cur.fetchone()
@@ -1386,5 +1386,3 @@ HTML_TEMPLATE = '''
 </body>
 </html>
 '''
-# app.py dosyasının en altına ekleyin:
-# Nihai zorla yeniden dağıtım
