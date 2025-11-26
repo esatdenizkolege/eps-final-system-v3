@@ -411,28 +411,34 @@ def handle_siparis_islem():
             new_siparis_codes = []
             while f'urun_kodu_{i}' in request.form:
                 urun_kodu = request.form[f'urun_kodu_{i}']
-                m2 = request.form[f'm2_{i}']
+                m2_str = request.form[f'm2_{i}'] # Metin olarak al
                 
                 # Sadece geçerli, dolu satırları işliyoruz
-                if urun_kodu and m2 and int(m2) > 0:
-                    siparis_kodu = get_next_siparis_kodu(conn)
-                    
-                    # Ürün kodundan cinsi ve kalınlığı ayrıştır
-                    cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
-                    if not cins_kalinlik_key:
-                         raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı.")
-                    
-                    cinsi, kalinlik = cins_kalinlik_key.rsplit(' ', 1) 
-                    
-                    cur.execute(""" INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, bekleyen_m2, durum, planlanan_is_gunu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """, 
-                                (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, int(m2), 'Bekliyor', 0))
-                    
-                    new_siparis_codes.append(siparis_kodu)
+                if urun_kodu and m2_str:
+                    try:
+                        m2 = int(m2_str)
+                    except ValueError:
+                        m2 = 0 # Sayıya çevrilemezse 0 kabul et
+                        
+                    if m2 > 0:
+                        siparis_kodu = get_next_siparis_kodu(conn)
+                        
+                        # Ürün kodundan cinsi ve kalınlığı ayrıştır
+                        cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
+                        if not cins_kalinlik_key:
+                            raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
+                        
+                        cinsi, kalinlik = cins_kalinlik_key.rsplit(' ', 1) 
+                        
+                        cur.execute(""" INSERT INTO siparisler (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, bekleyen_m2, durum, planlanan_is_gunu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """, 
+                                    (siparis_kodu, urun_kodu, cinsi, kalinlik, musteri, siparis_tarihi, termin_tarihi, m2, 'Bekliyor', 0))
+                        
+                        new_siparis_codes.append(siparis_kodu)
                     
                 i += 1
             
             if not new_siparis_codes:
-                 raise ValueError("Hiçbir geçerli sipariş satırı girilmedi.")
+                 raise ValueError("Hiçbir geçerli sipariş satırı (ürün kodu ve M² miktarı) girilmedi.")
                  
             conn.commit(); message = f"✅ {musteri} müşterisine ait {len(new_siparis_codes)} adet sipariş eklendi. Kodlar: {', '.join(new_siparis_codes)}"
             
@@ -700,6 +706,11 @@ HTML_TEMPLATE = '''
     <script>
         const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
 
+        // KRİTİK DÜZELTME: JINJA2 ile statik seçenekler oluşturuluyor ve JavaScript'e aktarılıyor.
+        const CINS_OPTIONS = `{% for c in CINSLER %}<option value="{{ c }}">{{ c }}</option>{% endfor %}`;
+        const KALINLIK_OPTIONS = `{% for k in KALINLIKLAR %}<option value="{{ k }}">{{ k }}</option>{% endfor %}`;
+
+
         // --- ÜRÜN KODU FİLTRELEME MANTIĞI ---
         function filterProductCodes(selectElement) {
             const container = selectElement.closest('.siparis-satir');
@@ -733,25 +744,22 @@ HTML_TEMPLATE = '''
         let siparisSatirIndex = 0;
         
         function getNewRowHtml(index) {
-            let html = \`
-                <div class="siparis-satir" data-index="\${index}">
-                    <select class="cinsi_select" name="cinsi_\${index}" required onchange="filterProductCodes(this)" style="width: 120px;">
-                        {% for c in CINSLER %}
-                            <option value="{{ c }}">{{ c }}</option>
-                        {% endfor %}
+            // KRİTİK DÜZELTME: Statik seçenek değişkenleri kullanılıyor ve name parametreleri index ile güncelleniyor.
+            let html = `
+                <div class="siparis-satir" data-index="${index}">
+                    <select class="cinsi_select" name="cinsi_${index}" required onchange="filterProductCodes(this)" style="width: 120px;">
+                        ${CINS_OPTIONS}
                     </select>
-                    <select class="kalinlik_select" name="kalinlik_\${index}" required onchange="filterProductCodes(this)" style="width: 90px;">
-                        {% for k in KALINLIKLAR %}
-                            <option value="{{ k }}">{{ k }}</option>
-                        {% endfor %}
+                    <select class="kalinlik_select" name="kalinlik_${index}" required onchange="filterProductCodes(this)" style="width: 90px;">
+                        ${KALINLIK_OPTIONS}
                     </select>
-                    <select class="urun_kodu_select" name="urun_kodu_\${index}" required style="width: 100px;">
+                    <select class="urun_kodu_select" name="urun_kodu_${index}" required style="width: 100px;">
                         <option value="">Ürün Kodu Seçin</option>
                     </select>
-                    <input type="number" name="m2_\${index}" min="1" required placeholder="M²" style="width: 70px;">
+                    <input type="number" name="m2_${index}" min="1" required placeholder="M²" style="width: 70px;">
                     <button type="button" onclick="removeRow(this)" style="background-color: #dc3545; width: auto;">X</button>
                 </div>
-            \`;
+            `;
             return html;
         }
 
@@ -760,7 +768,7 @@ HTML_TEMPLATE = '''
             container.insertAdjacentHTML('beforeend', getNewRowHtml(siparisSatirIndex));
             
             // Yeni eklenen satırdaki kodları filtrele
-            const newRow = container.querySelector(\`[data-index="\${siparisSatirIndex}"]\`);
+            const newRow = container.querySelector(`[data-index="${siparisSatirIndex}"]`);
             const cinsiSelect = newRow.querySelector('.cinsi_select');
             filterProductCodes(cinsiSelect);
 
@@ -822,20 +830,24 @@ HTML_TEMPLATE = '''
         
         <div class="grid">
             
+            <!-- 2. SİPARİŞ GİRİŞİ (YENİ ÇOKLU GİRİŞ) -->
             <div class="form-box" style="grid-column: 1 / span 1;">
                 <h2>2. Yeni Sipariş Girişi (Çoklu Ürün)</h2>
                 <form action="/siparis" method="POST">
                     <input type="hidden" name="action" value="yeni_siparis">
                     
+                    <!-- Ana Sipariş Bilgileri -->
                     <div class="form-section">
                         <input type="text" name="musteri" required placeholder="Müşteri Adı" style="width: 98%;">
                         <label style="font-size: 0.9em; margin-top: 5px; display: block;">Sipariş Tarihi: <input type="date" name="siparis_tarihi" value="{{ today }}" required style="width: calc(50% - 8px);"></label>
                         <label style="font-size: 0.9em; margin-top: 5px; display: block;">Termin Tarihi: <input type="date" name="termin_tarihi" required style="width: calc(50% - 8px);"></label>
                     </div>
                     
+                    <!-- Ürün Giriş Satırları -->
                     <div style="font-weight: bold; margin-top: 15px; border-bottom: 1px dashed #007bff; padding-bottom: 5px;">Ürün Kodları ve Metraj (M²)</div>
                     <div id="siparis-urun-container" style="margin-top: 10px;">
-                        </div>
+                        <!-- JS ile satırlar buraya eklenecek -->
+                    </div>
                     
                     <button type="button" onclick="addRow()" style="background-color: #28a745; margin-bottom: 15px; width: 100%;">+ Ürün Satırı Ekle</button>
                     
@@ -843,6 +855,7 @@ HTML_TEMPLATE = '''
                 </form>
             </div>
             
+            <!-- 1. STOK HAREKETLERİ -->
             <div class="form-box" style="grid-column: 2 / span 1; border-color: #6c757d; background-color: #f8f9fa;">
                 <h2>1. Stok Hareketleri</h2>
                 <div class="form-section">
@@ -965,74 +978,3 @@ HTML_TEMPLATE = '''
                 <td>{{ stok.ham_m2 }}</td>
                 <td>{{ stok.sivali_m2 }}</td>
                 <td>{{ stok.gerekli_siparis_m2 }}</td>
-                <td class="{% if stok.sivali_eksik > 0 %}deficit-sivali{% endif %}">{{ stok.sivali_eksik }}</td>
-                <td class="{% if stok.ham_eksik > 0 %}deficit-ham{% endif %}">{{ stok.ham_eksik }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        
-        <h2 style="margin-top: 30px;">4. Sipariş Listesi</h2>
-        <div class="table-responsive">
-        <table class="siparis-table">
-            <tr>
-                <th>ID</th>
-                <th>Kod</th>
-                <th>Ürün</th>
-                <th>Müşteri</th>
-                <th>Sipariş Tarihi</th>
-                <th>Termin Tarihi</th>
-                <th>Bekleyen M²</th>
-                <th>Durum</th>
-                <th>Planlanan İş Günü (Sıva)</th>
-                <th>İşlem</th>
-            </tr>
-            {% for siparis in siparisler %}
-            <tr class="{{ 'siparis-tamamlandi' if siparis.durum == 'Tamamlandi' else ('siparis-iptal' if siparis.durum == 'Iptal' else '') }}">
-                <td>{{ siparis.id }}</td>
-                <td>{{ siparis.siparis_kodu }}</td>
-                <td>{{ siparis.urun_kodu }} ({{ siparis.cinsi }} {{ siparis.kalinlik }})</td>
-                <td>{{ siparis.musteri }}</td>
-                <td>{{ siparis.siparis_tarihi }}</td>
-                <td>{{ siparis.termin_tarihi }}</td>
-                <td>{{ siparis.bekleyen_m2 }}</td>
-                <td>{{ siparis.durum }}</td>
-                <td>
-                    {% if siparis.durum == 'Bekliyor' %}
-                        {% if siparis.planlanan_is_gunu == 0 %}
-                            <span style="color:green; font-weight:bold;">Hemen Stoktan (0)</span>
-                        {% elif siparis.planlanan_is_gunu > 0 %}
-                            <span style="color:darkorange; font-weight:bold;">Gün {{ siparis.planlanan_is_gunu }}</span>
-                        {% else %}
-                            Planlanamaz (Kapasite Yok)
-                        {% endif %}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-                <td>
-                    {% if siparis.durum == 'Bekliyor' %}
-                        <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
-                        
-                        <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
-                            <input type="hidden" name="action" value="sil_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: darkred; padding: 4px 8px; margin-right: 5px;">Kalıcı Sil</button>
-                        </form>
-                        
-                        <form action="/siparis" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="action" value="tamamla_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: green; padding: 4px 8px;">Tamamla</button>
-                        </form>
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-        </div>
-    </div>
-</body>
-</html>
-'''
