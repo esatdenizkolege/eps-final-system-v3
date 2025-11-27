@@ -253,6 +253,7 @@ def calculate_planning(conn):
         for siparis in bekleyen_siparisler:
             
             # YENİ EK GÜVENLİK: Sorgu sonucunu döngüden hemen önce Python'da zorla temizle
+            # *** BU ADIM KRİTİKTİR, VERİTABANINDAN GELEN VERİYİ TEMİZLER ***
             siparis['cinsi'] = siparis['cinsi'].strip().upper()
             siparis['kalinlik'] = siparis['kalinlik'].strip().upper()
             
@@ -271,7 +272,7 @@ def calculate_planning(conn):
             
             # Sıvalı stoğu azalt
             if key in temp_stok_sivali:
-                 temp_stok_sivali[key] -= karsilanan_sivali
+                temp_stok_sivali[key] -= karsilanan_sivali
 
             # 2. Üretim İhtiyacını Hesapla (Ham Stoku Dikkate Almadan, sadece Sıva)
             eksik_sivali = kalan_ihtiyac 
@@ -309,6 +310,7 @@ def calculate_planning(conn):
 
         for siparis in bekleyen_siparisler:
             
+            # YENİ EK GÜVENLİK: Burada da siparişi temizlenmiş haliyle kullanıyoruz
             temiz_cinsi = siparis['cinsi'].strip().upper()
             temiz_kalinlik = siparis['kalinlik'].strip().upper()
             key = (temiz_cinsi, temiz_kalinlik)
@@ -321,7 +323,7 @@ def calculate_planning(conn):
             kalan_ihtiyac = gerekli_m2 - karsilanan_sivali
             
             if key in temp_sivali_stok_kopyasi:
-                 temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
+                temp_sivali_stok_kopyasi[key] -= karsilanan_sivali
             
             if kalan_ihtiyac > 0:
                 siva_uretim_sirasli_ihtiyac.append({
@@ -742,7 +744,7 @@ def ayarla_kalinlik():
         if yeni_kalinlik in updated_kalinliklar:
              for c in updated_cinsler:
                  new_variants_to_add.add((c, yeni_kalinlik))
-                 
+            
         # Yeni cins için mevcut/yeni tüm kalınlıkları ekle
         if yeni_cins in updated_cinsler:
              for k in updated_kalinliklar:
@@ -755,16 +757,18 @@ def ayarla_kalinlik():
              temiz_k = k.strip().upper()
              for asama in ['Ham', 'Sivali']:
                  cur.execute("""
-                    INSERT INTO stok (cinsi, kalinlik, asama, m2) 
-                    VALUES (%s, %s, %s, %s) 
-                    ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
+                     INSERT INTO stok (cinsi, kalinlik, asama, m2) 
+                     VALUES (%s, %s, %s, %s) 
+                     ON CONFLICT (cinsi, kalinlik, asama) DO NOTHING
                  """, (temiz_c, temiz_k, asama, 0))
         
         conn.commit()
         
-        # Global değişkenleri yeniden yükle (init_db de çağrılıyor ama burada da çağırmak mantıklı)
-        global VARYANTLAR
+        # 💡 KRİTİK ÇÖZÜM: Yeni Cins/Kalınlık eklendiğinde global değişkenleri hemen güncelle
+        global VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
         VARYANTLAR = [(c, k) for c in updated_cinsler for k in updated_kalinliklar]
+        CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
+        URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
         
         message = f"✅ Kombinasyon **{yeni_cins} {yeni_kalinlik}** başarıyla hazırlandı. ({cins_mesaji} / {kalinlik_mesaji})"
 
