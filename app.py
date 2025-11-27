@@ -85,6 +85,9 @@ def load_data(filename):
             'BAROK 3.6 CM': ['B401', 'B402', 'B403'],
             'YATAY TAŞ 3.6 CM': ['YT401', 'YT402', 'YT403'],
             'KAYRAK TAŞ 3.6 CM': ['KY401', 'KY402', 'KY403'],
+            # LBX Cinsi için varsayılan ürün kodları
+            'LBX 4 CM': ['LBX-E-001', 'LBX-E-002', 'LBX-E-003'], 
+            'LATA LB 4 CM': ['LATA-E-001', 'LBX-E-002', 'LATA-E-003'],
         }
     return {}
 
@@ -415,8 +418,7 @@ def index():
     message = request.args.get('message')
     gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
     
-    # *** KRİTİK DÜZELTME (V7): JSON verilerini ve değişkenleri HER SAYFA YÜKLEMEDE ZORLA YENİDEN YÜKLE ***
-    # Bu, yeni eklenen Cins/Kalınlıkların VARYANTLAR listesine girmesini garanti eder.
+    # *** KRİTİK DÜZELTME: JSON verilerini ve değişkenleri HER SAYFA YÜKLEMEDE ZORLA YENİDEN YÜKLE ***
     global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
     
     KALINLIKLAR = load_kalinliklar()
@@ -425,6 +427,11 @@ def index():
     CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
     URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
     
+    # YENİ KRİTİK GÜNCELLEME: Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
+    # Bu, tüm varyantların aşağıda stok listesine dahil edilmesini garanti eder.
+    with app.app_context():
+        init_db()
+
     # 2. Planlama ve Stok Haritasını Hesapla
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
@@ -466,11 +473,15 @@ def index():
     siparisler = cur.fetchall() 
     next_siparis_kodu = get_next_siparis_kodu(conn)
     today = datetime.now().strftime('%Y-%m-%d')
+    
+    # TOPLAM BEKLEYEN SİPARİŞ M2'Yİ HESAPLA
+    toplam_bekleyen_siparis_m2 = sum(s['bekleyen_m2'] for s in siparisler if s['durum'] == 'Bekliyor')
+    
     cur.close()
     conn.close()
     
     # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
-    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP)
+    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
 
 # --- KRİTİK VERİ KURTARMA ROTASI (Doğru yerleştirilmiş) ---
 @app.route('/admin/data_repair', methods=['GET'])
@@ -983,6 +994,9 @@ def api_stok_verileri():
                     item_dict['termin_tarihi'] = item_dict['termin_tarihi'].isoformat()
                 formatted_sevkiyatlar.append(item_dict)
             formatted_sevkiyat_plan_detay[k] = formatted_sevkiyatlar
+            
+        # TOPLAM BEKLEYEN SİPARİŞ M2'Yİ HESAPLA (API için)
+        toplam_bekleyen_siparis_m2_api = sum(s['bekleyen_m2'] for s in siparis_listesi if s['durum'] == 'Bekliyor')
 
         # Mobil arayüzün beklediği tüm veriyi döndür
         return jsonify({
@@ -992,7 +1006,8 @@ def api_stok_verileri():
             'toplam_gerekli_siva': toplam_gerekli_siva,
             'gunluk_siva_m2': gunluk_siva_m2,
             'siva_plan_detay': dict(siva_plan_detay), 
-            'sevkiyat_plan_detay': formatted_sevkiyat_plan_detay 
+            'sevkiyat_plan_detay': formatted_sevkiyat_plan_detay,
+            'toplam_bekleyen_siparis_m2': toplam_bekleyen_siparis_m2_api
         })
         
     except Exception as e:
@@ -1083,6 +1098,23 @@ HTML_TEMPLATE = '''
         .table-responsive { overflow-x: auto; margin-top: 15px; }
         .siparis-table { min-width: 1100px; table-layout: auto; }
         .siparis-table th:nth-child(10) { width: 250px; } /* İşlem sütununu genişletiyoruz */
+        
+        /* Yeni Stil */
+        .siparis-header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+        }
+        .bekleyen-m2-tag {
+            background-color: #f0f0f0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+        }
+
     </style>
     <script>
         const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
@@ -1382,7 +1414,13 @@ HTML_TEMPLATE = '''
             {% endfor %}
         </table>
         
-        <h2 style="margin-top: 30px;">4. Sipariş Listesi</h2>
+        <div class="siparis-header-container">
+            <h2 style="margin: 0;">4. Sipariş Listesi</h2>
+            <span class="bekleyen-m2-tag">
+                Toplam Bekleyen Sipariş: {{ toplam_bekleyen_siparis_m2 }} m²
+            </span>
+        </div>
+        
         <div class="table-responsive">
         <table class="siparis-table">
             <tr>
