@@ -1,0 +1,18 @@
+{
+    "cinsler": [
+        "BAROK",
+        "YATAY TAŞ",
+        "DÜZ TUĞLA",
+        "KAYRAK TAŞ",
+        "PARKE TAŞ",
+        "KIRIK TAŞ",
+        "BUZ TAŞ",
+        "MERMER",
+        "LB ZEMİN",
+        "LA",
+        "LBX",
+        "LATA LB"
+    ]
+}
+
+ADD: cin_listesi.json dosyasi olusturuldu (LBX ve LATA LB dahil)
