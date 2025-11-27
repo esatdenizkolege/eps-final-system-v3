@@ -40,11 +40,11 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # --- 0. SABİT TANIMLAMALAR VE DİNAMİK YÜKLEME ---
 
-# Varsayılanlar
-DEFAULT_KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM']
-DEFAULT_CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA']
+# Varsayılanlar ve ZORUNLU EKLENEN CİNSLERİ İÇEREN LİSTE
+DEFAULT_KALINLIKLAR = ['2 CM', '3.6 CM', '3 CM', '4 CM'] # 4 CM'yi zorla ekledik
+DEFAULT_CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE TAŞ', 'KIRIK TAŞ', 'BUZ TAŞ', 'MERMER', 'LB ZEMİN', 'LA', 'LBX', 'LATA LB'] # Yeni cinsleri zorla ekledik
 
-# --- JSON/KAPASİTE/ÜRÜN KODU YÖNETİMİ ---
+# --- JSON/KAPASITE/ÜRÜN KODU YÖNETİMİ ---
 
 def save_data(data, filename):
     """JSON verisini kaydeder."""
@@ -62,13 +62,13 @@ def load_data(filename):
     # Cins listesini yükle/oluştur
     if filename == CINS_FILE:
         if not os.path.exists(CINS_FILE):
+            # Varsayılanı kaydetmek yerine, DEFAULT_CINSLER'ı zorla yükle
             save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
-        # load_data fonksiyonunu çağırırken recursive loop'a girmemek için dosyadan direkt yükleme yapıyoruz.
         with open(CINS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
 
     if filename == 'urun_kodlari.json':
-        # Varsayılan urun_kodlari.json verisi
+        # Varsayılan urun_kodlari.json verisi (Yeni cinsleri ekledik)
         return {
             'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
             'PARKE TAŞ 2 CM': [f'PT{i:03}' for i in range(1, 31)],
@@ -85,7 +85,7 @@ def load_data(filename):
             'BAROK 3.6 CM': ['B401', 'B402', 'B403'],
             'YATAY TAŞ 3.6 CM': ['YT401', 'YT402', 'YT403'],
             'KAYRAK TAŞ 3.6 CM': ['KY401', 'KY402', 'KY403'],
-            # LBX Cinsi için varsayılan ürün kodları
+            # YENİ EKLENEN CİNSLER İÇİN ÖRNEK/VARSAYILAN KODLAR
             'LBX 4 CM': ['LBX-E-001', 'LBX-E-002', 'LBX-E-003'], 
             'LATA LB 4 CM': ['LATA-E-001', 'LBX-E-002', 'LATA-E-003'],
         }
@@ -421,6 +421,7 @@ def index():
     # *** KRİTİK DÜZELTME: JSON verilerini ve değişkenleri HER SAYFA YÜKLEMEDE ZORLA YENİDEN YÜKLE ***
     global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
     
+    # 1. JSON'dan verileri yükle (Güncel listeleri al)
     KALINLIKLAR = load_kalinliklar()
     CINSLER = load_cinsler()
     VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
@@ -430,13 +431,16 @@ def index():
     # YENİ KRİTİK GÜNCELLEME: Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
     # Bu, tüm varyantların aşağıda stok listesine dahil edilmesini garanti eder.
     with app.app_context():
-        init_db()
+        # Bu çağrı, KALINLIKLAR ve CINSLER'ı okur ve veritabanındaki stok kayıtlarını günceller/ekler.
+        init_db() 
 
     # 2. Planlama ve Stok Haritasını Hesapla
+    # init_db çağrıldığı için VARYANTLAR listesi günceldir ve stok_map'in tamamı oluşur
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
     # 3. Stok ve Eksik Analizi Listesini Oluştur
     stok_list = []
+    # BURADA VARYANTLAR KULLANILDIĞI İÇİN YENİ CİNSLER ARTIK LİSTEYE DAHİL EDİLMELİ.
     for cinsi_raw, kalinlik_raw in VARYANTLAR:
         
         # VARYANTLAR'daki Cinsi ve Kalınlığı temizle (Her zaman tutarlı)
@@ -445,6 +449,8 @@ def index():
         key = (cinsi, kalinlik)
         
         # Stok map'i temizlenmiş anahtarlarla tutulduğu için burada sorunsuz alınabilir.
+        # Stokta bu kombinasyon yoksa (yeni eklendiyse ve init_db çalışmadıysa) 0 gelir.
+        # Ama init_db() çalıştırıldığı için bu key'ler stok_map'te 0 m² ile bile olsa bulunmalıdır.
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
