@@ -2,7 +2,7 @@
 
 import os
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, render_template
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, render_template, flash
 
 # PostgreSQL'e bağlanmak için psycopg2 kütüphanesini kullanıyoruz.
 import psycopg2 
@@ -24,6 +24,8 @@ from flask_cors import CORS
 # Render'ın kullandığı PORT'u alır, yerelde 5000 kullanılır.
 PORT = int(os.environ.get('PORT', 5000)) 
 app = Flask(__name__)
+# Flash mesajları için gerekli
+app.secret_key = 'super_secret_key_change_me' 
 
 # Mobil erişim (CORS) için gereklidir.
 CORS(app) 
@@ -55,21 +57,31 @@ def load_data(filename):
     """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
     if os.path.exists(filename):
         with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            try:
+                return json.load(f)
+            except json.JSONDecodeError as e:
+                # KRİTİK DÜZELTME: JSON okuma hatasını yakala ve logla
+                print(f"KRİTİK HATA: {filename} dosyasinda JSONDecodeError: {e}")
+                if filename == 'urun_kodlari.json': return load_data_from_app_defaults(filename)
+                if filename == KALINLIK_FILE: return {'kalinliklar': DEFAULT_KALINLIKLAR}
+                if filename == CINS_FILE: return {'cinsler': DEFAULT_CINSLER}
+                if filename == KAPASITE_FILE: return {"gunluk_siva_m2": 600}
+                return {} # Varsayılan boş değer döndür
+    
+    # Yoksa varsayılan veriyi döndür
+    return load_data_from_app_defaults(filename)
+
+def load_data_from_app_defaults(filename):
+    """Dosya diskte yoksa veya JSON hatası varsa uygulamanın varsayılanlarını döndürür."""
     if filename == KAPASITE_FILE:
         return {"gunluk_siva_m2": 600}
     
-    # Cins listesini yükle/oluştur
     if filename == CINS_FILE:
-        if not os.path.exists(CINS_FILE):
-            # Varsayılanı kaydetmek yerine, DEFAULT_CINSLER'ı zorla yükle
-            save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
-        with open(CINS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
+        return {'cinsler': DEFAULT_CINSLER}
 
     if filename == 'urun_kodlari.json':
-        # Varsayılan urun_kodlari.json verisi (Yeni cinsleri ekledik)
-        return {
+        urun_kodlari_data = {
             'BAROK 2 CM': ['B001', 'B002', 'B003', 'B004', 'B005', 'B006', 'B007', 'B008', 'B009', 'B010', 'B011', 'B012', 'B013', 'B014', 'B015', 'B016', 'B017', 'B018', 'B019', 'B020', 'B021', 'B022', 'B023', 'B024', 'B025', 'B026', 'B027', 'B028', 'B029', 'B030', 'B031', 'B032', 'B033', 'B035', 'B036', 'B037', 'B038', 'B039', 'B040'],
             'PARKE TAŞ 2 CM': [f'PT{i:03}' for i in range(1, 31)],
             'KIRIK TAŞ 2 CM': [f'KR{i:03}' for i in range(1, 13)],
@@ -85,21 +97,23 @@ def load_data(filename):
             'BAROK 3.6 CM': ['B401', 'B402', 'B403'],
             'YATAY TAŞ 3.6 CM': ['YT401', 'YT402', 'YT403'],
             'KAYRAK TAŞ 3.6 CM': ['KY401', 'KY402', 'KY403'],
-            # YENİ EKLENEN CİNSLER İÇİN ÖRNEK/VARSAYILAN KODLAR
             'LBX 4 CM': ['LBX-E-001', 'LBX-E-002', 'LBX-E-003'], 
             'LATA LB 4 CM': ['LATA-E-001', 'LBX-E-002', 'LATA-E-003'],
         }
+        # Not: Bu, sadece dosya yoksa/bozuksa varsayılanı yükler. 
+        # Diskte bir JSON hatası yoksa, yukarıdaki load_data() başarılı olacaktır.
+        return urun_kodlari_data
+    
+    if filename == KALINLIK_FILE:
+        save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
+        return DEFAULT_KALINLIKLAR
+
     return {}
 
 def load_kalinliklar():
     """Kalınlık listesini JSON'dan yükler, yoksa varsayılanı kullanır ve kaydeder."""
-    if os.path.exists(KALINLIK_FILE):
-        with open(KALINLIK_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get('kalinliklar', DEFAULT_KALINLIKLAR)
-    # Yoksa varsayılanı kaydet ve döndür
-    save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
-    return DEFAULT_KALINLIKLAR
+    data = load_data(KALINLIK_FILE)
+    return data.get('kalinliklar', DEFAULT_KALINLIKLAR)
 
 def save_kalinliklar(kalinliklar):
     """Kalınlık listesini JSON'a kaydeder."""
@@ -115,7 +129,7 @@ def save_cinsler(cinsler):
     
 # Dinamik olarak yükle (Uygulama başlatıldığında güncel kalınlıklar ve cinsler yüklenir)
 KALINLIKLAR = load_kalinliklar()
-CINSLER = load_cinsler() # YENİ: Cinsler dinamik olarak yüklenir
+CINSLER = load_cinsler() 
 VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
 
 # Veri haritalarını yükle
@@ -195,12 +209,15 @@ def init_db():
 with app.app_context():
     init_db()
     
+    # Başlangıçta JSON dosyalarının varlığını kontrol et ve yoksa varsayılanı yükle
     if not os.path.exists(KAPASITE_FILE):
         save_data({"gunluk_siva_m2": 600}, KAPASITE_FILE)
     if not os.path.exists('urun_kodlari.json'):
         save_data(CINS_TO_BOYALI_MAP, 'urun_kodlari.json')
-    if not os.path.exists(CINS_FILE): # Cins dosyasının varlığını kontrol et
+    if not os.path.exists(CINS_FILE): 
         save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
+    if not os.path.exists(KALINLIK_FILE):
+        save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
 
 
 # --- 2. YARDIMCI FONKSİYONLAR VE PLANLAMA MANTIĞI ---
@@ -267,7 +284,6 @@ def calculate_planning(conn):
         for siparis in bekleyen_siparisler:
             
             # YENİ EK GÜVENLİK: Sorgu sonucunu döngüden hemen önce Python'da zorla temizle
-            # *** BU ADIM KRİTİKTİR, VERİTABANINDAN GELEN VERİYİ TEMİZLER ***
             siparis['cinsi'] = siparis['cinsi'].strip().upper()
             siparis['kalinlik'] = siparis['kalinlik'].strip().upper()
             
@@ -428,34 +444,24 @@ def index():
     CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
     URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
     
-    # YENİ KRİTİK GÜNCELLEME: Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
-    # Bu, tüm varyantların aşağıda stok listesine dahil edilmesini garanti eder.
+    # Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
     with app.app_context():
-        # Bu çağrı, KALINLIKLAR ve CINSLER'ı okur ve veritabanındaki stok kayıtlarını günceller/ekler.
         init_db() 
 
     # 2. Planlama ve Stok Haritasını Hesapla
-    # init_db çağrıldığı için VARYANTLAR listesi günceldir ve stok_map'in tamamı oluşur
     toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
     
     # 3. Stok ve Eksik Analizi Listesini Oluştur
     stok_list = []
-    # BURADA VARYANTLAR KULLANILDIĞI İÇİN YENİ CİNSLER ARTIK LİSTEYE DAHİL EDİLMELİ.
     for cinsi_raw, kalinlik_raw in VARYANTLAR:
         
-        # VARYANTLAR'daki Cinsi ve Kalınlığı temizle (Her zaman tutarlı)
         cinsi = cinsi_raw.strip().upper()
         kalinlik = kalinlik_raw.strip().upper()
         key = (cinsi, kalinlik)
         
-        # Stok map'i temizlenmiş anahtarlarla tutulduğu için burada sorunsuz alınabilir.
-        # Stokta bu kombinasyon yoksa (yeni eklendiyse ve init_db çalışmadıysa) 0 gelir.
-        # Ama init_db() çalıştırıldığı için bu key'ler stok_map'te 0 m² ile bile olsa bulunmalıdır.
         ham_m2 = stok_map.get(key, {}).get('Ham', 0)
         sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
         
-        # *** KRİTİK SORGULAMA DÜZELTMESİ (V9 - ILIKE ZORLAMA) ***
-        # PostgreSQL karakter eşleşme sorununu aşmak için ILIKE (Case Insensitive LIKE) kullanıldı.
         cur.execute(""" 
             SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
             FROM siparisler 
@@ -466,10 +472,8 @@ def index():
         
         bekleyen_m2_raw = cur.fetchone()
         
-        # COALESCE kullanıldığı için güvenle değeri alıyoruz.
         gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
 
-        # Eksik hesaplama mantığı
         sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
         ham_eksik = max(0, sivali_eksik - ham_m2)
         
@@ -483,13 +487,22 @@ def index():
     # TOPLAM BEKLEYEN SİPARİŞ M2'Yİ HESAPLA
     toplam_bekleyen_siparis_m2 = sum(s['bekleyen_m2'] for s in siparisler if s['durum'] == 'Bekliyor')
     
+    # Tarih nesnelerini HTML uyumlu string'e çevir
+    siparis_listesi = []
+    for s in siparisler:
+        s_dict = dict(s) 
+        if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
+            s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
+        if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
+            s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
+        siparis_listesi.append(s_dict)
+    
     cur.close()
     conn.close()
     
-    # HTML_TEMPLATE, uygulamanın en altında tanımlıdır.
-    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparisler, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
+    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
 
-# --- KRİTİK VERİ KURTARMA ROTASI (Doğru yerleştirilmiş) ---
+# --- KRİTİK VERİ KURTARMA ROTASI ---
 @app.route('/admin/data_repair', methods=['GET'])
 def repair_data_integrity():
     """Veritabanındaki cinsi ve kalinlik kolonlarındaki boşlukları ve küçük harfleri düzeltir."""
@@ -498,14 +511,11 @@ def repair_data_integrity():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # 1. STOK TABLOSUNU TEMİZLEME
         cur.execute("UPDATE stok SET cinsi = TRIM(UPPER(cinsi)), kalinlik = TRIM(UPPER(kalinlik))")
-        
-        # 2. SİPARİŞ TABLOSUNU TEMİZLEME
         cur.execute("UPDATE siparisler SET cinsi = TRIM(UPPER(cinsi)), kalinlik = TRIM(UPPER(kalinlik))")
         
         conn.commit()
-        return redirect(url_for('index', message="✅ KRİTİK VERİ KURTARMA BAŞARILI! Stok ve Sipariş Cinsi/Kalınlık verileri temizlendi. Şimdi siparişi tekrar deneyin."))
+        return redirect(url_for('index', message="✅ KRİTİK VERİ KURTARMA BAŞARILI! Stok ve Sipariş Cinsi/Kalınlık verileri temizlendi."))
         
     except Exception as e:
         if conn: conn.rollback()
@@ -514,16 +524,12 @@ def repair_data_integrity():
         if conn: conn.close()
 # -----------------------------------------------------------------------------
 
-
+# --- STOK VE YÖNETİM ROTLARI (DEĞİŞİKLİK YOK) ---
 @app.route('/islem', methods=['POST'])
 def handle_stok_islem():
-    """Stok hareketlerini yönetir."""
     action = request.form['action']
-    
-    # *** STOK İŞLEMLERİNDE GİRİŞ TEMİZLİĞİ (Veritabanına temiz kaydediyoruz) ***
     cinsi = request.form['cinsi'].strip().upper()
     kalinlik = request.form['kalinlik'].strip().upper()
-    
     m2 = int(request.form['m2'])
     conn = None
     message = ""
@@ -531,7 +537,9 @@ def handle_stok_islem():
     try:
         conn = get_db_connection() 
         cur = conn.cursor()
-
+        
+        # ... (Stok İşlemleri Mantığı) ...
+        # (Bu kısım uzun olduğu için burada kısaltıldı, ancak nihai kodunuzda kalmalıdır.)
         if action == 'ham_alim': 
             cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
             message = f"✅ {cinsi} {kalinlik} Ham stoğuna {m2} m² eklendi."
@@ -605,6 +613,7 @@ def handle_stok_islem():
         if conn: conn.close()
     return redirect(url_for('index', message=message))
 
+# --- SİPARİŞ ROTLARI (TERMİN TARİHİ DÜZELTMESİ BURADA) ---
 @app.route('/siparis', methods=['POST'])
 def handle_siparis_islem():
     """Sipariş ekler, düzenler, siler veya tamamlar."""
@@ -616,16 +625,13 @@ def handle_siparis_islem():
         cur = conn.cursor()
         
         if action == 'yeni_siparis':
-            # Çoklu sipariş mantığı
+            # ... (Yeni Sipariş Ekleme Mantığı) ...
             musteri = request.form['musteri']
             siparis_tarihi = request.form['siparis_tarihi']
             termin_tarihi = request.form['termin_tarihi']
             
             new_siparis_codes = []
-            # Tüm form anahtarlarını kontrol ediyoruz.
             all_keys = list(request.form.keys())
-            # Sipariş satırlarının indekslerini buluyoruz.
-            # Not: Cinsi/kalinlik bilgisi artık direkt formdan gelmiyor, urun_kodu ile eşleşiyor.
             indices = sorted(list(set([int(k.split('_')[-1]) for k in all_keys if k.startswith('urun_kodu_')])))
 
             for i in indices:
@@ -635,37 +641,26 @@ def handle_siparis_islem():
                 urun_kodu = request.form.get(urun_kodu_key, '').strip()
                 m2_str = request.form.get(m2_key, '').strip() 
                 
-                # Sadece geçerli, dolu satırları işliyoruz
                 if urun_kodu and m2_str:
-                    try:
-                        m2 = int(m2_str)
-                    except ValueError:
-                        m2 = 0 # Sayıya çevrilemezse 0 kabul et
+                    try: m2 = int(m2_str)
+                    except ValueError: m2 = 0 
                         
                     if m2 > 0:
                         siparis_kodu = get_next_siparis_kodu(conn)
-                        
-                        # Ürün kodundan cinsi ve kalınlığı ayrıştır
                         cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
                         if not cins_kalinlik_key:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
                             
-                        
-                        
-                        # 💡 YENİ, GÜVENLİ VE KESİN DÜZELTME: Kalınlığı ayırıp, kalanı cins olarak alıyoruz
-                        parts = cins_kalinlik_key.rsplit(' ', 2) # Sondan iki boşlukla ayır. Örn: ['BAROK', '2', 'CM']
+                        parts = cins_kalinlik_key.rsplit(' ', 2) 
                         if len(parts) == 3:
                             cinsi_raw = parts[0]
-                            kalinlik_raw = f"{parts[1]} {parts[2]}" # Kalınlık 2 CM
+                            kalinlik_raw = f"{parts[1]} {parts[2]}" 
                         elif len(parts) == 2:
-                            # Eğer Cins tek kelimeyse ve Kalınlık tek kelimeyse (Örn: BAROK 2CM)
                             cinsi_raw = parts[0]
                             kalinlik_raw = parts[1]
                         else:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık formatı hatalı: {cins_kalinlik_key}")
 
-
-                        # *** KRİTİK DÜZELTME: Veritabanına YAZARKEN temizle ve BÜYÜK HARFE çevir (Eşleşme için zorunlu) ***
                         cinsi = cinsi_raw.strip().upper() 
                         kalinlik = kalinlik_raw.strip().upper() 
                         
@@ -684,19 +679,18 @@ def handle_siparis_islem():
             cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
             
-        # DÜZELTİLDİ: Siparişi Düzenleme 
+        # KRİTİK DÜZELTME: SİPARİŞİ DÜZENLEME (Termin Tarihi Eklendi)
         elif action == 'duzenle_siparis':
             siparis_id = request.form['siparis_id']
             yeni_urun_kodu = request.form['yeni_urun_kodu']
             yeni_m2 = int(request.form['yeni_m2'])
+            yeni_termin_tarihi = request.form['yeni_termin_tarihi'] # YENİ ALAN
             
             # Ürün kodundan cins/kalınlık tespiti
             cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
             if not cins_kalinlik_key:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
                     
-            
-            # 💡 YENİ, GÜVENLİ VE KESİN DÜZELTME: Kalınlığı ayırıp, kalanı cins olarak alıyoruz
             parts = cins_kalinlik_key.rsplit(' ', 2)
             if len(parts) == 3:
                 yeni_cinsi_raw = parts[0]
@@ -707,24 +701,22 @@ def handle_siparis_islem():
             else:
                 raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık formatı hatalı: {cins_kalinlik_key}")
 
-            # Veritabanına yazmadan önce temizle ve büyük harfe çevir
             yeni_cinsi = yeni_cinsi_raw.strip().upper()
             yeni_kalinlik = yeni_kalinlik_raw.strip().upper()
 
             cur.execute("""
                 UPDATE siparisler SET 
-                urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s 
+                urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s, termin_tarihi = %s
                 WHERE id = %s AND durum = 'Bekliyor'
-            """, (yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, siparis_id))
+            """, (yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_termin_tarihi, siparis_id))
             
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m²."
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m². Yeni Termin: {yeni_termin_tarihi}"
 
         # YENİ EK: Siparişi Kalıcı Silme (İz bırakmaz)
         elif action == 'sil_siparis':
             siparis_id = request.form['siparis_id']
             cur.execute("DELETE FROM siparisler WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} veritabanından **kalıcı olarak silindi**."
-            
             
         cur.close()
     except psycopg2.IntegrityError: 
@@ -738,7 +730,6 @@ def handle_siparis_islem():
         message = f"❌ Veritabanı Hatası: {str(e)}"
     finally: 
         if conn: conn.close()
-    # Yönlendirme yapıldığında index() rotası çalışır ve planlama güncellenir.
     return redirect(url_for('index', message=message))
 
 
@@ -760,21 +751,19 @@ def ayarla_kalinlik():
     """Yeni bir kalınlık ve/veya cins ekler ve stok tablosuna varsayılan girişleri yapar."""
     global KALINLIKLAR, CINSLER
     yeni_kalinlik_input = request.form['yeni_kalinlik'].strip()
-    yeni_cins_input = request.form['yeni_cins'].strip().upper() # Yeni Cins alanı
+    yeni_cins_input = request.form['yeni_cins'].strip().upper() 
     message = ""
     conn = None
     try:
         if not yeni_kalinlik_input or not yeni_cins_input: 
             raise ValueError("Cins ve Kalınlık alanları boş olamaz.")
         
-        # 1. Kalınlık Formatını Hazırla (CM Ekleme)
         temp_kalinlik = yeni_kalinlik_input.replace(',', '.').upper()
         if not temp_kalinlik.endswith(' CM'):
             yeni_kalinlik = temp_kalinlik + ' CM'
         else:
             yeni_kalinlik = temp_kalinlik
 
-        # 2. Cinsi Ekle (Eğer Mevcut Değilse)
         yeni_cins = yeni_cins_input
         if yeni_cins not in CINSLER:
             CINSLER.append(yeni_cins)
@@ -783,7 +772,6 @@ def ayarla_kalinlik():
         else:
             cins_mesaji = f"Mevcut Cins **{yeni_cins}** kullanıldı."
 
-        # 3. Kalınlığı Ekle (Eğer Mevcut Değilse)
         if yeni_kalinlik not in KALINLIKLAR: 
             KALINLIKLAR.append(yeni_kalinlik)
             save_kalinliklar(KALINLIKLAR)
@@ -791,30 +779,23 @@ def ayarla_kalinlik():
         else:
             kalinlik_mesaji = f"Mevcut Kalınlık **{yeni_kalinlik}** kullanıldı."
 
-        # 4. Veritabanına Stok Kaydını Ekle (Yeni Kombinasyon için)
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # VARYANTLAR'ı güncel listelerle yeniden oluştur
         updated_cinsler = load_cinsler()
         updated_kalinliklar = load_kalinliklar()
         
-        # Yeni eklenen cins ve kalınlığı içeren TÜM kombinasyonları kontrol et
         new_variants_to_add = set()
         
-        # Yeni kalınlık için mevcut/yeni tüm cinsleri ekle
         if yeni_kalinlik in updated_kalinliklar:
             for c in updated_cinsler:
                 new_variants_to_add.add((c, yeni_kalinlik))
             
-        # Yeni cins için mevcut/yeni tüm kalınlıkları ekle
         if yeni_cins in updated_cinsler:
             for k in updated_kalinliklar:
                 new_variants_to_add.add((yeni_cins, k))
         
-        # Veritabanına ekle
         for c, k in new_variants_to_add:
-            # Burada da temizleme (strip.upper) zorunlu
             temiz_c = c.strip().upper()
             temiz_k = k.strip().upper()
             for asama in ['Ham', 'Sivali']:
@@ -826,7 +807,6 @@ def ayarla_kalinlik():
         
         conn.commit()
         
-        # 💡 KRİTİK ÇÖZÜM: Yeni Cins/Kalınlık eklendiğinde global değişkenleri hemen güncelle
         global VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
         VARYANTLAR = [(c, k) for c in updated_cinsler for k in updated_kalinliklar]
         CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
@@ -860,7 +840,6 @@ def ayarla_urun_kodu():
             urun_kodlari_map[cins_kalinlik_key].append(yeni_kod); urun_kodlari_map[cins_kalinlik_key].sort()
             save_data(urun_kodlari_map, 'urun_kodlari.json')
             
-            # KRİTİK DÜZELTME: Global haritayı hemen güncelle ki, bir sonraki isteği doğru görebilsin.
             global CINS_TO_BOYALI_MAP
             CINS_TO_BOYALI_MAP = urun_kodlari_map 
             
@@ -876,20 +855,14 @@ def temizle_veritabani():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Siparişleri sil
         cur.execute("DELETE FROM siparisler")
-        # Stokları sil
         cur.execute("DELETE FROM stok")
         
-        # *** KRİTİK DÜZELTME: Veritabanını sıfırlamadan önce ve sonra JSON'dan güncel listeleri zorla yükle ***
-        
-        # 1. JSON'dan güncel listeleri zorla yükle
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
-        VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR] # VARYANTLAR güncellendi
+        VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR] 
 
-        # 2. Sıfır miktar ile varsayılan stokları yeniden ekle (Güncel listeleri kullanıyoruz)
         for c, k in VARYANTLAR:
             temiz_c = c.strip().upper()
             temiz_k = k.strip().upper()
@@ -902,9 +875,8 @@ def temizle_veritabani():
                 
         conn.commit()
         
-        # Uygulama bağlamını güncellemek için bir ipucu (zorunlu değil ama faydalı)
         with app.app_context():
-            init_db() # Yeni listelerle veritabanı başlatma adımlarını tekrar çalıştır
+            init_db() 
             
         return redirect(url_for('index', message="✅ TÜM VERİLER SİLİNDİ ve GÜNCEL STOKLAR SIFIRLANDI!"))
         
@@ -921,11 +893,10 @@ def temizle_veritabani():
 def api_stok_verileri():
     """Mobil görünüm için stok, sipariş ve planlama verilerini JSON olarak döndürür."""
     conn = None
-    try: # Hata yakalamayı başlat
+    try: 
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # YENİ: Kalınlıklar ve Cinsler değişmiş olabileceği için VARYANTLAR'ı tekrar oluştur
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
         CINSLER = load_cinsler()
@@ -946,7 +917,6 @@ def api_stok_verileri():
             stok_data[f"{key} (Ham)"] = stok_map.get(stok_key, {}).get('Ham', 0)
             stok_data[f"{key} (Sivali)"] = stok_map.get(stok_key, {}).get('Sivali', 0)
             
-            # *** KRİTİK SORGULAMA DÜZELTMESİ (V9 - ILIKE ZORLAMA) ***
             cur.execute(""" 
                 SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
                 FROM siparisler 
@@ -957,7 +927,6 @@ def api_stok_verileri():
             
             bekleyen_m2_raw = cur.fetchone()
             
-            # COALESCE kullanıldığı için güvenle değeri alıyoruz.
             gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
 
             sivali_stok = stok_map.get(stok_key, {}).get('Sivali', 0)
@@ -975,7 +944,6 @@ def api_stok_verileri():
         cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
         siparisler = cur.fetchall()
         
-        # Tarih alanlarını JSON uyumlu string'e çevir (KRİTİK DÜZELTME)
         siparis_listesi = []
         for s in siparisler:
             s_dict = dict(s) 
@@ -983,16 +951,14 @@ def api_stok_verileri():
                 s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
             if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
                 s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
-            s_dict['id'] = str(s_dict['id']) # ID'yi mobil için string yap
+            s_dict['id'] = str(s_dict['id']) 
             siparis_listesi.append(s_dict)
 
         cur.close()
         conn.close()
 
-        # Tarih nesnelerini JSON'a çevirmeden önce string'e dönüştür
         formatted_sevkiyat_plan_detay = {}
         for k, v in sevkiyat_plan_detay.items():
-            # Her sözlükteki tarih objelerini string'e çevir
             formatted_sevkiyatlar = []
             for item in v:
                 item_dict = dict(item)
@@ -1001,10 +967,8 @@ def api_stok_verileri():
                 formatted_sevkiyatlar.append(item_dict)
             formatted_sevkiyat_plan_detay[k] = formatted_sevkiyatlar
             
-        # TOPLAM BEKLEYEN SİPARİŞ M2'Yİ HESAPLA (API için)
         toplam_bekleyen_siparis_m2_api = sum(s['bekleyen_m2'] for s in siparis_listesi if s['durum'] == 'Bekliyor')
 
-        # Mobil arayüzün beklediği tüm veriyi döndür
         return jsonify({
             'stok': stok_data,
             'deficit_analysis': deficit_analysis,
@@ -1020,7 +984,6 @@ def api_stok_verileri():
         print(f"--- KRİTİK HATA LOGU (api_stok_verileri) ---")
         print(f"Hata Tipi: {type(e).__name__}")
         print(f"Hata Mesajı: {str(e)}")
-        # Tarayıcıya 500 hatası döndür, hata detayını API yanıtına ekle.
         return jsonify({'error': 'Sunucu Hatası', 'detail': f"API hatası: {str(e)} - Logları Kontrol Edin"}), 500
     finally:
         if conn: conn.close()
@@ -1043,6 +1006,10 @@ HTML_TEMPLATE = '''
 <head>
     <title>EPS Panel Yönetimi</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+    
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
         .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); }
@@ -1056,7 +1023,7 @@ HTML_TEMPLATE = '''
             border: 2px solid #007bff; 
             padding: 15px; 
             border-radius: 8px; 
-            background-color: #e6f0ff; /* Hafif mavi arka plan */
+            background-color: #e6f0ff; 
             margin-bottom: 20px;
         }
         .form-box h2 { 
@@ -1082,11 +1049,11 @@ HTML_TEMPLATE = '''
         button:hover { background-color: #0056b3; }
         
         input[type="number"], input[type="text"], input[type="date"], select { 
-            padding: 8px; /* Daha dolgun */
+            padding: 8px; 
             margin: 5px 5px 5px 0;
             border: 1px solid #ccc; 
             border-radius: 4px; 
-            box-sizing: border-box; /* Responsive uyum */
+            box-sizing: border-box; 
         }
         
         .siparis-satir { 
@@ -1103,9 +1070,8 @@ HTML_TEMPLATE = '''
         /* Tablo Genişlikleri ve Kaydırma */
         .table-responsive { overflow-x: auto; margin-top: 15px; }
         .siparis-table { min-width: 1100px; table-layout: auto; }
-        .siparis-table th:nth-child(10) { width: 250px; } /* İşlem sütununu genişletiyoruz */
+        .siparis-table th:nth-child(10) { width: 250px; } 
         
-        /* Yeni Stil */
         .siparis-header-container {
             display: flex;
             justify-content: space-between;
@@ -1120,19 +1086,54 @@ HTML_TEMPLATE = '''
             font-weight: bold;
             color: #333;
         }
+        /* DataTables Özelleştirmesi */
+        #siparis-table_wrapper { margin-top: 15px; }
+        .dataTables_filter { margin-bottom: 10px; }
+        .dataTables_filter label { font-weight: bold; }
 
+        /* MODAL STİLİ (Düzenleme için Kullanıcı Dostu Arayüz) */
+        .modal {
+            display: none; 
+            position: fixed;
+            z-index: 10; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto; 
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; 
+            max-width: 500px;
+            border-radius: 8px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
     </style>
     <script>
         const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
 
-        // KRİTİK DÜZELTME: JINJA2 ile statik seçenekler oluşturuluyor ve JavaScript'e aktarılıyor.
         const CINSLER = {{ CINSLER | tojson }};
         const KALINLIKLAR = {{ KALINLIKLAR | tojson }};
         
         const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
         const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
 
-        // Satır şablonu (index yerine placeholder kullanıyoruz)
         const ROW_TEMPLATE = (index) => `
             <div class="siparis-satir" data-index="${index}">
                 <select class="cinsi_select" name="cinsi_${index}" required onchange="filterProductCodes(this)" style="width: 120px;">
@@ -1151,20 +1152,21 @@ HTML_TEMPLATE = '''
             </div>
         `;
 
-
-        // --- ÜRÜN KODU FİLTRELEME MANTIĞI ---
         function filterProductCodes(selectElement) {
-            const container = selectElement.closest('.siparis-satir');
+            const container = selectElement.closest('.siparis-satir') || document.getElementById('edit-modal-form');
             const cinsiSelect = container.querySelector('.cinsi_select');
             const kalinlikSelect = container.querySelector('.kalinlik_select');
             const urunKoduSelect = container.querySelector('.urun_kodu_select');
             
             const cinsi = cinsiSelect.value;
             const kalinlik = kalinlikSelect.value;
+            
+            // Eğer burası modal ise, mevcut seçimi koruyabiliriz.
+            const currentCode = urunKoduSelect.value;
+            
             urunKoduSelect.innerHTML = '<option value="">Ürün Kodu Seçin</option>'; 
             
             if (cinsi && kalinlik) {
-                // Burada CINS_TO_BOYALI_MAP kullanılıyor, bu nedenle Python tarafında güncel olması ZORUNLU.
                 const key = cinsi + ' ' + kalinlik;
                 const codes = CINS_TO_BOYALI_MAP[key] || [];
                 
@@ -1175,6 +1177,10 @@ HTML_TEMPLATE = '''
                         option.textContent = code;
                         urunKoduSelect.appendChild(option);
                     });
+                    // Mevcut kodu yeniden seç
+                    if (currentCode && codes.includes(currentCode)) {
+                        urunKoduSelect.value = currentCode;
+                    }
                 } else {
                     const option = document.createElement('option');
                     option.value = '';
@@ -1184,7 +1190,6 @@ HTML_TEMPLATE = '''
             }
         }
 
-        // --- ÇOKLU SİPARİŞ SATIRI EKLEME/ÇIKARMA MANTIĞI ---
         let siparisSatirIndex = 0;
         
         function addRow(count = 1) {
@@ -1192,13 +1197,6 @@ HTML_TEMPLATE = '''
             for (let i = 0; i < count; i++) {
                 const newHtml = ROW_TEMPLATE(siparisSatirIndex);
                 container.insertAdjacentHTML('beforeend', newHtml);
-                
-                // Yeni eklenen satırdaki kodları filtrele (seçenekleri yüklemek için)
-                const newRow = container.querySelector(`[data-index="${siparisSatirIndex}"]`);
-                const cinsiSelect = newRow.querySelector('.cinsi_select');
-                
-                // Başlangıçta boş seçenekler olduğu için otomatik filtrelemeye gerek yok.
-
                 siparisSatirIndex++;
             }
         }
@@ -1208,38 +1206,74 @@ HTML_TEMPLATE = '''
             row.remove();
         }
 
-        // --- DÜZENLEME MODAL FONKSİYONU ---
-        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu) {
-            const yeni_m2 = prompt(`Sipariş ID ${id} için yeni M² miktarını girin (Mevcut: ${m2}):`);
+        // --- DÜZENLEME MODALI FONKSİYONU (Kullanıcı Dostu UI) ---
+        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin_tarihi) {
+            // Modalı göster
+            document.getElementById('editModal').style.display = 'block';
             
-            if (yeni_m2 !== null && !isNaN(parseInt(yeni_m2))) {
-                const yeni_urun_kodu = prompt(`Sipariş ID ${id} için yeni Ürün Kodunu girin (Mevcut: ${urun_kodu}):`, urun_kodu);
-                
-                if (yeni_urun_kodu !== null) {
-                    // Cins ve kalınlık bilgileri urun_kodu'ndan otomatik çekileceği için formda göndermeye gerek yok
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '/siparis';
-                    
-                    form.innerHTML = `
-                        <input type="hidden" name="action" value="duzenle_siparis">
-                        <input type="hidden" name="siparis_id" value="${id}">
-                        <input type="hidden" name="yeni_m2" value="${parseInt(yeni_m2)}">
-                        <input type="hidden" name="yeni_urun_kodu" value="${yeni_urun_kodu}">
-                    `;
-                    
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            } else if (yeni_m2 !== null) {
-                // Kullanıcı boş bırakmadıysa ama sayı girmediyse
-                // Lütfen geçerli bir M² miktarı girin. Uyarısı zaten promptta var.
+            // Verileri forma yükle
+            const form = document.getElementById('edit-modal-form');
+            form.action = '/siparis'; 
+            
+            form.querySelector('input[name="siparis_id"]').value = id;
+            form.querySelector('input[name="yeni_m2"]').value = m2;
+            form.querySelector('input[name="yeni_termin_tarihi"]').value = termin_tarihi;
+            form.querySelector('input[name="yeni_urun_kodu_hidden"]').value = urun_kodu; // Geçici olarak sakla
+            
+            const cinsiSelect = form.querySelector('.cinsi_select');
+            const kalinlikSelect = form.querySelector('.kalinlik_select');
+            
+            // Cins ve Kalınlık değerlerini seç
+            const cinsiKey = cinsi.toUpperCase();
+            const kalinlikKey = kalinlik.toUpperCase();
+            
+            cinsiSelect.value = cinsiKey;
+            kalinlikSelect.value = kalinlikKey;
+            
+            // Ürün kodlarını filtrele ve doğru kodu seç
+            filterProductCodes(cinsiSelect); // Kodları doldur
+            form.querySelector('.urun_kodu_select').value = urun_kodu; // Doğru kodu seç
+            
+            form.querySelector('input[name="yeni_urun_kodu_hidden"]').value = ''; // Temizle
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+        
+        // Modalın dışına tıklayınca kapanması
+        window.onclick = function(event) {
+            const modal = document.getElementById('editModal');
+            if (event.target == modal) {
+                modal.style.display = "none";
             }
         }
         
+        // Modal içindeki select değişince ürün kodu listesini güncelle
         document.addEventListener('DOMContentLoaded', () => {
-            // İlk açılışta 5 satırı otomatik ekle (İstenen Özellik)
+            // DataTable'ı başlat (Filtreleme için)
+            $('#siparis-table').DataTable({
+                "language": {
+                    "url": "https://cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json"
+                },
+                "scrollX": true,
+                "paging": true,
+                "ordering": true,
+                "info": false,
+                "searching": true // Tüm sütunlarda arama
+            });
+
+            // İlk açılışta 5 satırı otomatik ekle
             addRow(5);  
+
+            // Modal Select değişimini dinle
+            const modalForm = document.getElementById('edit-modal-form');
+            if (modalForm) {
+                 const selects = modalForm.querySelectorAll('.cinsi_select, .kalinlik_select');
+                 selects.forEach(select => {
+                     select.addEventListener('change', () => filterProductCodes(select));
+                 });
+            }
         });
     </script>
 </head>
@@ -1254,6 +1288,13 @@ HTML_TEMPLATE = '''
                 <a href="{{ url_for('repair_data_integrity') }}" onclick="return confirm('UYARI: Veri kurtarma işlemi, mevcut tüm Cins/Kalınlık verilerini zorla temizleyip büyük harfe çevirir. Bu, eksik stok hatasını kesin çözmelidir. Emin misiniz?')" style="color: purple; font-weight: bold; margin-left: 15px;">[VERİ KURTARMA (ZORLA TEMİZLE)]</a>
             </span>
         </p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="message {% if category == 'success' %}success{% else %}error{% endif %}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         {% if message %}
             <div class="message {% if 'Hata' in message or 'Yetersiz' in message %}error{% else %}success{% endif %}">{{ message }}</div>
         {% endif %}
@@ -1428,19 +1469,22 @@ HTML_TEMPLATE = '''
         </div>
         
         <div class="table-responsive">
-        <table class="siparis-table">
-            <tr>
-                <th>ID</th>
-                <th>Kod</th>
-                <th>Ürün</th>
-                <th>Müşteri</th>
-                <th>Sipariş Tarihi</th>
-                <th>Termin Tarihi</th>
-                <th>Bekleyen M²</th>
-                <th>Durum</th>
-                <th>Planlanan İş Günü (Sıva)</th>
-                <th>İşlem</th>
-            </tr>
+        <table class="siparis-table" id="siparis-table"> 
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Kod</th>
+                    <th>Ürün (Cins/K.)</th>
+                    <th>Müşteri</th>
+                    <th>Sipariş Tarihi</th>
+                    <th>Termin Tarihi</th>
+                    <th>Bekleyen M²</th>
+                    <th>Durum</th>
+                    <th>Planlanan İş Günü (Sıva)</th>
+                    <th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
             {% for siparis in siparisler %}
             <tr class="{{ 'siparis-tamamlandi' if siparis.durum == 'Tamamlandi' else ('siparis-iptal' if siparis.durum == 'Iptal' else '') }}">
                 <td>{{ siparis.id }}</td>
@@ -1466,7 +1510,7 @@ HTML_TEMPLATE = '''
                 </td>
                 <td>
                     {% if siparis.durum == 'Bekliyor' %}
-                        <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
+                        <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}', '{{ siparis.termin_tarihi }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
                         
                         <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
                             <input type="hidden" name="action" value="sil_siparis">
@@ -1485,14 +1529,56 @@ HTML_TEMPLATE = '''
                 </td>
             </tr>
             {% endfor %}
+            </tbody>
         </table>
         </div>
+    </div>
+
+    <div id="editModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeEditModal()">&times;</span>
+        <h2>Sipariş Düzenleme</h2>
+        <form id="edit-modal-form" action="/siparis" method="POST">
+            <input type="hidden" name="action" value="duzenle_siparis">
+            <input type="hidden" name="siparis_id" value="">
+            <input type="hidden" name="yeni_urun_kodu_hidden" value=""> 
+            
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Yeni M² Miktarı:</label>
+                <input type="number" name="yeni_m2" min="1" required style="width: 100%;" placeholder="Yeni M²">
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Yeni Termin Tarihi:</label>
+                <input type="date" name="yeni_termin_tarihi" required style="width: 100%;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Ürün Seçimi (Cins/K. & Kod):</label>
+                <select class="cinsi_select" required style="width: 49%;" onchange="filterProductCodes(this)">
+                    <option value="">Cins Seçin</option>
+                    {% for c in CINSLER %}
+                        <option value="{{ c }}">{{ c }}</option>
+                    {% endfor %}
+                </select>
+                <select class="kalinlik_select" required style="width: 49%;" onchange="filterProductCodes(this)">
+                    <option value="">Kalınlık Seçin</option>
+                    {% for k in KALINLIKLAR %}
+                        <option value="{{ k }}">{{ k }}</option>
+                    {% endfor %}
+                </select>
+                <select class="urun_kodu_select" name="yeni_urun_kodu" required style="width: 100%; margin-top: 10px;">
+                    <option value="">Ürün Kodu Seçin</option>
+                    </select>
+            </div>
+            
+            <button type="submit" style="background-color:#ff9800; width: 100%;">Değişiklikleri Kaydet</button>
+        </form>
+      </div>
     </div>
 </body>
 </html>
 '''
 
 if __name__ == '__main__':
-    # Hata ayıklama modunu devre dışı bırakıp host'u '0.0.0.0' yaparak Render üzerinde çalışmasını sağlıyoruz.
-    # PORT değişkeni yukarıda zaten tanımlanmıştır.
     app.run(host='0.0.0.0', port=PORT)
