@@ -38,9 +38,21 @@
         "B037",
         "B038",
         "B039",
-        "B040"
+        "B040",
+        "BOYASIZ",
+        "L 1702",
+        "L 1711",
+        "L 1713",
+        "L 1806",
+        "L 1812",
+        "L 1900",
+        "L 1901",
+        "L 1902",
+        "L 1903",
+        "L 1925"
     ],
     "PARKE TAŞ 2 CM": [
+        "BOYASIZ",
         "PT001",
         "PT002",
         "PT003",
@@ -73,6 +85,7 @@
         "PT030"
     ],
     "KIRIK TAŞ 2 CM": [
+        "BOYASIZ",
         "KR001",
         "KR002",
         "KR003",
@@ -87,6 +100,7 @@
         "KR012"
     ],
     "YATAY TAŞ 2 CM": [
+        "BOYASIZ",
         "YT011",
         "YT012",
         "YT013",
@@ -95,6 +109,7 @@
         "YT016"
     ],
     "KAYRAK TAŞ 2 CM": [
+        "BOYASIZ",
         "KY001",
         "KY002",
         "KY003",
@@ -111,6 +126,7 @@
         "KY014"
     ],
     "DÜZ TUĞLA 2 CM": [
+        "BOYASIZ",
         "DT101",
         "DT102",
         "DT103",
@@ -133,6 +149,7 @@
         "DT120"
     ],
     "DÜZ TUĞLA 3.6 CM": [
+        "BOYASIZ",
         "DT301",
         "DT302",
         "DT303",
@@ -155,6 +172,7 @@
         "DT320"
     ],
     "BUZ TAŞ 2 CM": [
+        "BOYASIZ",
         "BT001",
         "BT002",
         "BT003",
@@ -167,6 +185,7 @@
         "BT010"
     ],
     "BUZ TAŞ 3.6 CM": [
+        "BOYASIZ",
         "BT101",
         "BT102",
         "BT103",
@@ -179,6 +198,7 @@
         "BT110"
     ],
     "MERMER 3 CM": [
+        "BOYASIZ",
         "M001",
         "M002",
         "M003",
@@ -190,6 +210,7 @@
         "M009"
     ],
     "LA 3 CM": [
+        "BOYASIZ",
         "L001",
         "L002",
         "L003",
@@ -201,6 +222,7 @@
         "L009"
     ],
     "LB ZEMİN 3 CM": [
+        "BOYASIZ",
         "LB001",
         "LB002",
         "LB003",
@@ -214,26 +236,113 @@
     "BAROK 3.6 CM": [
         "B401",
         "B402",
-        "B403"
+        "B403",
+        "BOYASIZ"
     ],
     "YATAY TAŞ 3.6 CM": [
+        "BOYASIZ",
         "YT401",
         "YT402",
         "YT403"
     ],
     "KAYRAK TAŞ 3.6 CM": [
+        "BOYASIZ",
         "KY401",
         "KY402",
         "KY403"
     ],
     "LBX 4 CM": [
+        "BOYASIZ",
         "LBX-E-001",
         "LBX-E-002",
         "LBX-E-003"
     ],
     "LATA LB 4 CM": [
+        "BOYASIZ",
         "LATA-E-001",
         "LBX-E-002",
         "LATA-E-003"
+    ],
+    "BAROK 3 CM": [
+        "BOYASIZ"
+    ],
+    "YATAY TAŞ 3 CM": [
+        "BOYASIZ"
+    ],
+    "DÜZ TUĞLA 3 CM": [
+        "BOYASIZ"
+    ],
+    "KAYRAK TAŞ 3 CM": [
+        "BOYASIZ"
+    ],
+    "PARKE TAŞ 3 CM": [
+        "BOYASIZ"
+    ],
+    "KIRIK TAŞ 3 CM": [
+        "BOYASIZ"
+    ],
+    "BUZ TAŞ 3 CM": [
+        "BOYASIZ"
+    ],
+    "MERMER 2 CM": [
+        "BOYASIZ"
+    ],
+    "LA 2 CM": [
+        "BOYASIZ"
+    ],
+    "LB ZEMİN 2 CM": [
+        "BOYASIZ"
+    ],
+    "BAROK 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "YATAY TAŞ 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "DÜZ TUĞLA 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "KAYRAK TAŞ 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "PARKE TAŞ 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "KIRIK TAŞ 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "BUZ TAŞ 3.0 CM": [
+        "BOYASIZ"
+    ],
+    "MERMER 3.6 CM": [
+        "BOYASIZ"
+    ],
+    "LA 3.6 CM": [
+        "BOYASIZ"
+    ],
+    "LB ZEMİN 3.6 CM": [
+        "BOYASIZ"
+    ],
+    "LBX 2 CM": [
+        "BOYASIZ",
+        "LBX 001",
+        "LBX 002",
+        "LBX 003",
+        "LBX 004",
+        "LBX 005",
+        "LBX 006",
+        "LBX 007",
+        "LBX 008",
+        "LBX 009",
+        "LBX 010"
+    ],
+    "LBX 3.6 CM": [
+        "BOYASIZ"
+    ],
+    "LATA LB 2 CM": [
+        "BOYASIZ"
+    ],
+    "LATA LB 3.6 CM": [
+        "BOYASIZ"
     ]
 }
