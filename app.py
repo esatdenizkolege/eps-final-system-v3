@@ -712,6 +712,30 @@ def handle_siparis_islem():
             
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m². Yeni Termin: {yeni_termin_tarihi}"
 
+        # YENİ EK: Kısmi Tamamlama
+        elif action == 'kismi_tamamla':
+            siparis_id = request.form['siparis_id']
+            hazirlanan_m2 = int(request.form['hazirlanan_m2'])
+            
+            cur.execute("SELECT bekleyen_m2 FROM siparisler WHERE id = %s", (siparis_id,))
+            row = cur.fetchone()
+            
+            if row:
+                current_bekleyen = row['bekleyen_m2']
+                yeni_bekleyen = current_bekleyen - hazirlanan_m2
+                
+                if yeni_bekleyen <= 0:
+                    # Tamamen bitti
+                    cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
+                    message = f"✅ Sipariş ID {siparis_id} TAMAMLANDI. ({hazirlanan_m2} m² düşüldü, kalan sıfırlandı)."
+                else:
+                    # Kısmi bitti
+                    cur.execute("UPDATE siparisler SET bekleyen_m2 = %s WHERE id = %s", (yeni_bekleyen, siparis_id))
+                    message = f"✅ Sipariş ID {siparis_id} güncellendi. {hazirlanan_m2} m² düşüldü. KALAN: {yeni_bekleyen} m²."
+                conn.commit()
+            else:
+                raise ValueError("Sipariş bulunamadı.")
+
         # YENİ EK: Siparişi Kalıcı Silme (İz bırakmaz)
         elif action == 'sil_siparis':
             siparis_id = request.form['siparis_id']
@@ -1267,7 +1291,6 @@ HTML_TEMPLATE = '''
             addRow(5);  
 
             // Modal Select değişimini dinle
-            const modalForm = document.getElementById('edit-modal-form');
             if (modalForm) {
                  const selects = modalForm.querySelectorAll('.cinsi_select, .kalinlik_select');
                  selects.forEach(select => {
@@ -1275,6 +1298,19 @@ HTML_TEMPLATE = '''
                  });
             }
         });
+
+        // --- KISMİ TAMAMLAMA MODALI ---
+        function openPartialModal(id, current_m2, urun_kodu) {
+            document.getElementById('partialModal').style.display = 'block';
+            document.getElementById('partial_siparis_id').value = id;
+            document.getElementById('partial_max_m2').innerText = current_m2;
+            document.getElementById('partial_urun_info').innerText = urun_kodu;
+            document.getElementById('partial_input').max = current_m2;
+        }
+
+        function closePartialModal() {
+            document.getElementById('partialModal').style.display = 'none';
+        }
     </script>
 </head>
 <body>
@@ -1512,20 +1548,21 @@ HTML_TEMPLATE = '''
                     {% if siparis.durum == 'Bekliyor' %}
                         <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}', '{{ siparis.termin_tarihi }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
                         
-                        <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
-                            <input type="hidden" name="action" value="sil_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: darkred; padding: 4px 8px; margin-right: 5px;">Kalıcı Sil</button>
-                        </form>
-                        
+                        <button type="button" onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: #17a2b8; padding: 4px 8px; margin-right: 5px;">🔻 Kısmi</button>
+
                         <form action="/siparis" method="POST" style="display:inline-block;">
                             <input type="hidden" name="action" value="tamamla_siparis">
                             <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: green; padding: 4px 8px;">Tamamla</button>
+                            <button type="submit" style="background-color: green; padding: 4px 8px; margin-right: 5px;">Tamamla</button>
                         </form>
-                    {% else %}
-                        -
                     {% endif %}
+
+                    <!-- SİLME BUTONU: HER DURUMDA GÖRÜNSÜN (Bekleyen veya Tamamlandı) -->
+                     <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
+                        <input type="hidden" name="action" value="sil_siparis">
+                        <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                        <button type="submit" style="background-color: darkred; padding: 4px 8px;">Kalıcı Sil</button>
+                    </form>
                 </td>
             </tr>
             {% endfor %}
@@ -1573,6 +1610,29 @@ HTML_TEMPLATE = '''
             </div>
             
             <button type="submit" style="background-color:#ff9800; width: 100%;">Değişiklikleri Kaydet</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- KISMİ TAMAMLAMA MODALI -->
+    <div id="partialModal" class="modal">
+      <div class="modal-content" style="max-width: 400px;">
+        <span class="close" onclick="closePartialModal()">&times;</span>
+        <h2 style="color: #17a2b8;">🔻 Kısmi Tamamlama</h2>
+        <p>Ürün: <b id="partial_urun_info"></b></p>
+        <p>Şu an Bekleyen: <b id="partial_max_m2"></b> m²</p>
+        
+        <form action="/siparis" method="POST">
+            <input type="hidden" name="action" value="kismi_tamamla">
+            <input type="hidden" name="siparis_id" id="partial_siparis_id" value="">
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Hazırlanan Miktar (m²):</label>
+                <input type="number" name="hazirlanan_m2" id="partial_input" min="1" required style="width: 100%; border: 2px solid #17a2b8;" placeholder="Örn: 50">
+                <small style="color: #666;">* Eğer girilen miktar bekleyen miktara eşit veya büyükse, sipariş <b>TAMAMLANDI</b> olarak işaretlenecektir.</small>
+            </div>
+
+            <button type="submit" style="background-color:#17a2b8; width: 100%;">Kaydet ve Düş</button>
         </form>
       </div>
     </div>
