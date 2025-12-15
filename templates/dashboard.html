@@ -822,14 +822,7 @@
         </div>
     </div>
 
-    <!-- VISUAL DEBUGGER -->
-    <div id="debug-panel"
-        class="fixed bottom-0 right-0 bg-black/80 text-white p-4 text-xs font-mono z-50 max-w-sm rounded-tl-lg shadow-lg pointer-events-none">
-        <h3 class="font-bold border-b border-gray-600 mb-1">DEBUG MONITOR</h3>
-        <div id="debug-api-status" class="text-yellow-400">API: Loading...</div>
-        <div id="debug-last-key" class="mt-1">Last Key: -</div>
-        <div id="debug-lookup-result" class="mt-1 text-gray-400">Result: -</div>
-    </div>
+
 
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -843,26 +836,16 @@
         const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
         const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
 
-        function updateDebug(elementId, text, colorClass = "") {
-            const el = document.getElementById(elementId);
-            if (el) {
-                el.innerText = text;
-                if (colorClass) el.className = colorClass;
-            }
-        }
+
 
         // Load Product Codes from API
         async function loadProductCodes() {
             try {
-                updateDebug('debug-api-status', 'API: Fetching...', 'text-blue-400');
                 const response = await fetch('/api/urun_kodlari');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 CINS_TO_BOYALI_MAP = await response.json();
-                const keyCount = Object.keys(CINS_TO_BOYALI_MAP).length;
-                console.log("DEBUG: Product Map Loaded via API", keyCount, "keys");
-
-                updateDebug('debug-api-status', `API: OK (${keyCount} Keys Loaded)`, 'text-green-400');
+                console.log("DEBUG: Product Map Loaded via API", Object.keys(CINS_TO_BOYALI_MAP).length, "keys");
 
                 // Initialize the first row AFTER data is loaded to ensure consistency
                 const container = document.getElementById('siparis-urun-container');
@@ -872,7 +855,6 @@
 
             } catch (error) {
                 console.error("CRITICAL: Failed to load product codes", error);
-                updateDebug('debug-api-status', `API ERROR: ${error.message}`, 'text-red-500 font-bold');
                 alert("Ürün kodları yüklenemedi! Lütfen sayfayı yenileyin.\n" + error.message);
             }
         }
@@ -911,7 +893,7 @@
             if (cinsi && kalinlik) {
                 // Try standard lookup first
                 let key = cinsi + ' ' + kalinlik;
-                updateDebug('debug-last-key', `Values: [${cinsi}] + [${kalinlik}]`);
+
 
                 let codes = CINS_TO_BOYALI_MAP[key];
                 let method = "Direct";
@@ -932,13 +914,10 @@
                 }
 
                 if (!codes) {
-                    updateDebug('debug-lookup-result', `❌ Not Found (Tried: ${method})`, 'text-red-400');
                     console.error(`No codes found for key: ${key}`);
                     // Debug helper for user
                     // alert(`Kod listesi bulunamadı: ${key}`); 
                     codes = [];
-                } else {
-                    updateDebug('debug-lookup-result', `✅ Found ${codes.length} codes (${method})`, 'text-green-400');
                 }
 
                 console.log("DEBUG: Found Codes:", codes);
@@ -968,9 +947,6 @@
                     }
                     urunKoduSelect.value = currentCode;
                 }
-            } else {
-                updateDebug('debug-last-key', "Waiting for selection...");
-                updateDebug('debug-lookup-result', "-");
             }
         }
 
@@ -982,7 +958,8 @@
                 rowIndex++;
                 const html = `
                     <div class="siparis-satir flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200" id="row-${rowIndex}">
-                        <select name="urun_kodu_${rowIndex}" class="urun_kodu_select hidden"></select> <!-- Compatibility placeholder -->
+                        <select name="urun_kodu_${rowIndex}" class="hidden"></select> <!-- Compatibility placeholder -->
+
                         
                         <div class="flex-1 grid grid-cols-2 gap-2">
                              <select class="cinsi_select w-full text-xs rounded border-slate-300" name="cinsi_${rowIndex}" required onchange="filterProductCodes(this)">
