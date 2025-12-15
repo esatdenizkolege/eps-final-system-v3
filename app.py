@@ -10,6 +10,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor 
 
 import json
+import unicodedata
 
 from datetime import datetime, timedelta
 
@@ -53,12 +54,26 @@ def save_data(data, filename):
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
+def normalize_nfc(text):
+    """Metni NFC formuna (composed) normalize eder."""
+    if isinstance(text, str):
+        return unicodedata.normalize('NFC', text)
+    return text
+
 def load_data(filename):
     """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
     if os.path.exists(filename):
         with open(filename, 'r', encoding='utf-8') as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                # Normalize string data immediately upon load
+                if filename == 'urun_kodlari.json':
+                    return {normalize_nfc(k): [normalize_nfc(v) for v in vals] for k, vals in data.items()}
+                if filename == CINS_FILE:
+                    return {'cinsler': [normalize_nfc(c) for c in data.get('cinsler', [])]}
+                if filename == KALINLIK_FILE:
+                    return {'kalinliklar': [normalize_nfc(k) for k in data.get('kalinliklar', [])]}
+                return data
             except json.JSONDecodeError as e:
                 # KRİTİK DÜZELTME: JSON okuma hatasını yakala ve logla
                 print(f"KRİTİK HATA: {filename} dosyasinda JSONDecodeError: {e}")
