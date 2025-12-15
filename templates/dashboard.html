@@ -428,11 +428,12 @@
                                 <thead>
                                     <tr>
                                         <!-- ID Column Hidden mobile -->
-                                        <th class="hidden lg:table-cell">ID</th>
-                                        <th>Kod</th>
+                                        <th class="hidden md:table-cell">ID</th>
                                         <th>Müşteri</th>
-                                        <th class="hidden lg:table-cell">Detay</th>
-                                        <th>Tarihler</th>
+                                        <th>Kod</th>
+                                        <th class="hidden sm:table-cell">Detay</th>
+                                        <th class="hidden sm:table-cell">Sipariş Tar.</th>
+                                        <th>Termin Tar.</th>
                                         <th>M²</th>
                                         <th>Durum</th>
                                         <th>İşlemler</th>
@@ -442,19 +443,15 @@
                                     {% for siparis in siparisler %}
                                     <tr
                                         class="hover:bg-slate-50 transition {{ 'bg-green-50/50' if siparis.durum == 'Tamamlandi' }}">
-                                        <td class="hidden lg:table-cell text-xs text-slate-400 font-mono">#{{ siparis.id
+                                        <td class="hidden md:table-cell text-xs text-slate-400 font-mono">#{{ siparis.id
                                             }}</td>
-                                        <td class="font-mono font-semibold">{{ siparis.urun_kodu }}</td>
                                         <td class="text-sm font-medium">{{ siparis.musteri }}</td>
-                                        <td class="hidden lg:table-cell text-xs text-slate-500">{{ siparis.cinsi }} {{
+                                        <td class="font-mono font-semibold">{{ siparis.urun_kodu }}</td>
+                                        <td class="hidden sm:table-cell text-xs text-slate-500">{{ siparis.cinsi }} {{
                                             siparis.kalinlik }}</td>
-                                        <td class="text-xs text-slate-500">
-                                            <div class="flex flex-col">
-                                                <span>Sip: {{ siparis.siparis_tarihi }}</span>
-                                                <span class="font-bold text-slate-700">Ter: {{ siparis.termin_tarihi
-                                                    }}</span>
-                                            </div>
-                                        </td>
+                                        <td class="hidden sm:table-cell text-xs text-slate-500">{{
+                                            siparis.siparis_tarihi }}</td>
+                                        <td class="font-bold text-slate-700 text-sm">{{ siparis.termin_tarihi }}</td>
                                         <td class="font-bold text-slate-700">{{ siparis.bekleyen_m2 }}</td>
                                         <td>
                                             {% if siparis.durum == 'Bekliyor' %}
@@ -1023,7 +1020,7 @@
                 responsive: true,
                 language: { url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json" },
                 pageLength: 25,
-                order: [[4, "asc"]] // Sort by dates
+                order: [[5, "asc"]] // Sort by Termin Tarihi (Index 5 now)
             });
 
             // Add initial row
