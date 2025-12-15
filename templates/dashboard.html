@@ -826,12 +826,30 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
     <script>
-        const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
+        let CINS_TO_BOYALI_MAP = {}; // Will be loaded from API
         const CINSLER = {{ CINSLER | tojson }};
         const KALINLIKLAR = {{ KALINLIKLAR | tojson }};
 
         const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
         const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
+
+        // Load Product Codes from API
+        async function loadProductCodes() {
+            try {
+                const response = await fetch('/api/urun_kodlari');
+                CINS_TO_BOYALI_MAP = await response.json();
+                console.log("DEBUG: Product Map Loaded via API", Object.keys(CINS_TO_BOYALI_MAP).length, "keys");
+            } catch (error) {
+                console.error("CRITICAL: Failed to load product codes", error);
+                alert("Ürün kodları yüklenemedi! Lütfen sayfayı yenileyin.");
+            }
+        }
+
+        // Init logic
+        $(document).ready(function () {
+            loadProductCodes();
+        });
+
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -1026,9 +1044,10 @@
                 pageLength: 25,
                 order: [[5, "asc"]] // Sort by Termin Tarihi (Index 5 now)
             });
+        });
 
-            // Add initial row
-            addRow(1);
+        // Add initial row
+        addRow(1);
         });
     </script>
 </body>
