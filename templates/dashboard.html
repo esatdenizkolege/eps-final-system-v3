@@ -131,10 +131,10 @@
                     <i class="fa-solid fa-dolly w-6"></i> Üretim Hareketleri
                 </a>
 
-                <!-- 4. Stok Tanımlamaları -->
+                <!-- 4. Stok Görünümü & Tanımlar -->
                 <a href="#" onclick="showSection('section-stock-defs', this)"
                     class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
-                    <i class="fa-solid fa-tags w-6"></i> Stok Tanımlamaları
+                    <i class="fa-solid fa-layer-group w-6"></i> Stok Görünümü
                 </a>
 
                 <!-- 5. Günlük Üretim ve Sevkiyat Planı -->
@@ -214,40 +214,84 @@
 
                 <!-- 1. DASHBOARD OVERVIEW -->
                 <div id="section-dashboard" class="content-section space-y-6">
-                    <!-- Reuse Top Stats Here -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold text-slate-800">Genel Durum</h2>
+                        <p class="text-sm text-slate-500">Fabrika üretim ve sipariş özeti</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                        <!-- Total Order M2 -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md transition"
+                            onclick="showSection('section-pending-orders')">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-semibold text-slate-500 uppercase">Bekleyen Sipariş</p>
-                                    <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ toplam_bekleyen_siparis_m2 }}
-                                        m²</h3>
+                                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Toplam Sipariş
+                                        Miktarı (Aktif)</p>
+                                    <h3 class="text-3xl font-bold text-slate-800 mt-2">
+                                        {{ siparisler|sum(attribute='m2')|round(1) }} <span
+                                            class="text-lg font-normal text-slate-400">m²</span>
+                                    </h3>
                                 </div>
-                                <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                                    <i class="fa-solid fa-clipboard-list text-xl"></i>
+                                <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                                    <i class="fa-solid fa-layer-group text-2xl"></i>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <!-- Pending Order M2 -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md transition"
+                            onclick="showSection('section-pending-orders')">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-semibold text-slate-500 uppercase">Sıvalı Üretim İhtiyacı</p>
-                                    <h3
-                                        class="text-2xl font-bold {{ 'text-red-600' if toplam_gerekli_siva > 0 else 'text-green-600' }} mt-1">
-                                        {{ toplam_gerekli_siva }} m²
+                                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Bekleyen Sipariş
+                                        Miktarı</p>
+                                    <h3 class="text-3xl font-bold text-slate-800 mt-2">
+                                        {{ toplam_bekleyen_siparis_m2 }} <span
+                                            class="text-lg font-normal text-slate-400">m²</span>
                                     </h3>
                                 </div>
-                                <div class="p-2 bg-orange-50 text-orange-600 rounded-lg">
-                                    <i class="fa-solid fa-trowel-bricks text-xl"></i>
+                                <div class="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                                    <i class="fa-solid fa-clock text-2xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stock Warning -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md transition"
+                            onclick="showSection('section-stock-defs')">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Üretilmesi
+                                        Gereken</p>
+                                    <h3
+                                        class="text-3xl font-bold {{ 'text-red-500' if toplam_gerekli_siva > 0 else 'text-green-500' }} mt-2">
+                                        {{ toplam_gerekli_siva }} <span
+                                            class="text-lg font-normal text-slate-400">m²</span>
+                                    </h3>
+                                </div>
+                                <div class="p-3 bg-red-50 text-red-600 rounded-xl">
+                                    <i class="fa-solid fa-fire text-2xl"></i>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-blue-50 border border-blue-100 rounded-lg p-8 text-center">
-                        <h2 class="text-2xl font-bold text-blue-900 mb-2">Hoşgeldiniz</h2>
-                        <p class="text-blue-700">Sol menüden işlem yapmak istediğiniz modülü seçiniz.</p>
+                    <div
+                        class="hidden lg:block bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 text-white relative overflow-hidden shadow-2xl">
+                        <div class="relative z-10 max-w-2xl">
+                            <h2 class="text-3xl font-bold mb-4">Hoşgeldiniz</h2>
+                            <p class="text-slate-300 text-lg mb-6">EPS Yönetim Paneli v3.1 güncel versiyonu ile
+                                hizmetinizde. Sol menüyü kullanarak üretim planlayabilir veya yeni sipariş
+                                girebilirsiniz.</p>
+                            <button
+                                onclick="showSection('section-new-order', document.querySelector('a[onclick*=\'section-new-order\']'))"
+                                class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-bold transition shadow-lg shadow-blue-500/30">
+                                Yeni Sipariş Oluştur
+                            </button>
+                        </div>
+                        <!-- Decorative Blob -->
+                        <div class="absolute right-0 top-0 h-full w-1/3 bg-white/5 skew-x-12 transform translate-x-10">
+                        </div>
                     </div>
                 </div>
 
@@ -312,39 +356,7 @@
                             </h2>
                         </div>
                         <div class="p-6 space-y-6">
-                            <!-- Quick Add Actions -->
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="bg-orange-50 p-4 rounded-lg border border-orange-100">
-                                    <h4 class="text-xs font-bold text-orange-800 uppercase mb-2">Tanım Ekle</h4>
-                                    <form action="/ayarla/kalinlik" method="POST" class="space-y-2">
-                                        <input type="text" name="yeni_cins" placeholder="Cins (LBX)"
-                                            class="w-full text-xs px-2 py-1 rounded border-orange-200" required>
-                                        <input type="text" name="yeni_kalinlik" placeholder="Kalınlık (1.5)"
-                                            class="w-full text-xs px-2 py-1 rounded border-orange-200" required>
-                                        <button
-                                            class="w-full bg-orange-500 text-white text-xs py-1 rounded hover:bg-orange-600">Ekle</button>
-                                    </form>
-                                </div>
-                                <div class="bg-cyan-50 p-4 rounded-lg border border-cyan-100">
-                                    <h4 class="text-xs font-bold text-cyan-800 uppercase mb-2">Kod Ekle</h4>
-                                    <form action="/ayarla/urun_kodu" method="POST" class="space-y-2">
-                                        <input type="text" name="yeni_urun_kodu" placeholder="Kod (L101)"
-                                            class="w-full text-xs px-2 py-1 rounded border-cyan-200" required>
-                                        <select name="cinsi" class="w-full text-xs px-2 py-1 rounded border-cyan-200"
-                                            required>
-                                            {% for c in CINSLER %}
-                                            {% for k in KALINLIKLAR %}
-                                            <option value="{{ c }} {{ k }}">{{ c }} {{ k }}</option>
-                                            {% endfor %}
-                                            {% endfor %}
-                                        </select>
-                                        <button
-                                            class="w-full bg-cyan-600 text-white text-xs py-1 rounded hover:bg-cyan-700">Ekle</button>
-                                    </form>
-                                </div>
-                            </div>
-                            <hr class="border-slate-100">
-                            <!-- Stock Action Form -->
+                            <!-- Stock Action Form (MOVED DEFINITIONS TO STOCK SECTION) -->
                             <form action="/islem" method="POST" class="space-y-3">
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-500 mb-1">İşlem Tipi</label>
@@ -378,11 +390,57 @@
                     </div>
                 </div>
 
-                <!-- 4. STOCK DEFINITIONS & TABLE -->
+                <!-- 4. STOCK OVERVIEW & DEFINITIONS -->
                 <div id="section-stock-defs" class="content-section hidden">
+                    <!-- Definitions Forms (Moved from Production) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-orange-100">
+                            <h4 class="text-sm font-bold text-orange-800 uppercase mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-plus"></i> Yeni Ürün Tanımı Ekle
+                            </h4>
+                            <form action="/ayarla/kalinlik" method="POST" class="flex gap-2">
+                                <input type="text" name="yeni_cins" placeholder="Cins (Örn: LBX)"
+                                    class="w-1/3 text-sm px-3 py-2 rounded border border-slate-200 focus:border-orange-500 outline-none"
+                                    required>
+                                <input type="text" name="yeni_kalinlik" placeholder="Kalınlık (Örn: 1.5)"
+                                    class="w-1/3 text-sm px-3 py-2 rounded border border-slate-200 focus:border-orange-500 outline-none"
+                                    required>
+                                <button
+                                    class="w-1/3 bg-orange-600 text-white text-sm font-bold rounded hover:bg-orange-700 transition">Kaydet</button>
+                            </form>
+                            <p class="text-[10px] text-slate-400 mt-2">Bu işlem yeni bir Cins/Kalınlık kombinasyonu
+                                yaratır.</p>
+                        </div>
+
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-cyan-100">
+                            <h4 class="text-sm font-bold text-cyan-800 uppercase mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-barcode"></i> Yeni Ürün Kodu Ekle
+                            </h4>
+                            <form action="/ayarla/urun_kodu" method="POST" class="flex gap-2">
+                                <input type="text" name="yeni_urun_kodu" placeholder="Kod (Örn: L101)"
+                                    class="w-1/3 text-sm px-3 py-2 rounded border border-slate-200 focus:border-cyan-500 outline-none"
+                                    required>
+                                <select name="cinsi"
+                                    class="w-1/3 text-sm px-3 py-2 rounded border border-slate-200 focus:border-cyan-500 outline-none"
+                                    required>
+                                    <option value="" disabled selected>Ürün Seç</option>
+                                    {% for c in CINSLER %}
+                                    {% for k in KALINLIKLAR %}
+                                    <option value="{{ c }} {{ k }}">{{ c }} {{ k }}</option>
+                                    {% endfor %}
+                                    {% endfor %}
+                                </select>
+                                <button
+                                    class="w-1/3 bg-cyan-600 text-white text-sm font-bold rounded hover:bg-cyan-700 transition">Kaydet</button>
+                            </form>
+                            <p class="text-[10px] text-slate-400 mt-2">Mevcut bir ürüne yeni bir varyant kodu ekler.</p>
+                        </div>
+                    </div>
+
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="p-4 bg-slate-50 border-b border-slate-100">
+                        <div class="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                             <h3 class="font-bold text-slate-700">Detaylı Stok Görünümü</h3>
+                            <span class="text-xs text-slate-500">Anlık ham ve sıvalı stok durumları</span>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm text-left">
@@ -1299,11 +1357,10 @@
         window.analysisData = [];
 
         async function loadAnalysisData() {
-            const modal = document.getElementById('analysisModal');
+            // Visibility is handled by showSection('section-analysis') calling this.
             const listContainer = document.getElementById('analysisList');
             const searchInput = document.getElementById('analysisSearch');
 
-            modal.classList.remove('hidden');
             searchInput.value = '';
             searchInput.focus();
 
@@ -1319,6 +1376,8 @@
                 const response = await fetch('/api/siparis_analizi');
                 if (!response.ok) throw new Error("API Hatası");
                 window.analysisData = await response.json();
+
+                console.log("Analysis Data Loaded:", window.analysisData); // Debug info for user
 
                 renderAnalysis(window.analysisData);
 
