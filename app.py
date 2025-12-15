@@ -617,6 +617,8 @@ def handle_stok_islem():
             else: 
                 cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Ham'", (m2, cinsi, kalinlik))
                 message = f"✅ {cinsi} {kalinlik} Ham alımı iptal edildi ({m2} m² stoktan çıkarıldı)."
+
+
         
         elif action == 'iptal_siva':
             cur.execute("SELECT m2 FROM stok WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (cinsi, kalinlik))
@@ -645,6 +647,16 @@ def handle_stok_islem():
     finally: 
         if conn: conn.close()
     return redirect(url_for('index', message=message))
+
+@app.route('/api/urun_kodlari')
+def get_urun_kodlari_api():
+    """Ürün kodları haritasını JSON olarak döndürür."""
+    global CINS_TO_BOYALI_MAP
+    # Ensure map is loaded
+    if not CINS_TO_BOYALI_MAP:
+        CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
+    return jsonify(CINS_TO_BOYALI_MAP)
+
 
 # --- SİPARİŞ ROTLARI (TERMİN TARİHİ DÜZELTMESİ BURADA) ---
 @app.route('/siparis', methods=['POST'])
