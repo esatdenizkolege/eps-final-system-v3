@@ -856,7 +856,11 @@
 
             if (cinsi && kalinlik) {
                 const key = cinsi + ' ' + kalinlik;
+                console.log("DEBUG: Testing Key:", key); // DEBUG
+                console.log("DEBUG: Available Keys:", Object.keys(CINS_TO_BOYALI_MAP)); // DEBUG
+
                 const codes = CINS_TO_BOYALI_MAP[key] || [];
+                console.log("DEBUG: Found Codes:", codes); // DEBUG
 
                 codes.forEach(code => {
                     const option = document.createElement('option');

@@ -469,6 +469,10 @@ def index():
     CINSLER = load_cinsler()
     VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
     CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
+    print(f"DEBUG: Loaded Map Keys Count: {len(CINS_TO_BOYALI_MAP)}") # DEBUG
+    if len(CINS_TO_BOYALI_MAP) > 0:
+        print(f"DEBUG: Sample Key: {list(CINS_TO_BOYALI_MAP.keys())[0]}")
+        
     URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
     
     # Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
