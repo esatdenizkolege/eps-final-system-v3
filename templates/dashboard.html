@@ -865,113 +865,175 @@
                 const response = await fetch('/api/urun_kodlari');
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-                CINS_TO_BOYALI_MAP = await response.json();
-                console.log("DEBUG: Product Map Loaded via API", Object.keys(CINS_TO_BOYALI_MAP).length, "keys");
+                window.productMap = await response.json();
+                window.CINS_TO_BOYALI_MAP = window.productMap; // Compatibility
 
-                // Initialize the first row AFTER data is loaded to ensure consistency
+                // REVERSE MAP & ALL CODES
+                window.reverseProductMap = {};
+                window.allCodes = [];
+
+                for (const [key, codes] of Object.entries(window.productMap)) {
+                    codes.forEach(code => {
+                        window.reverseProductMap[code] = key;
+                        window.allCodes.push(code);
+                    });
+                }
+
+                console.log("DEBUG: Product Maps Loaded. Total Codes:", window.allCodes.length);
+
+                // Initialize UI
                 const container = document.getElementById('siparis-urun-container');
                 if (container && container.children.length === 0) {
                     addRow(1);
+                } else {
+                    // Update existing rows if any
+                    document.querySelectorAll('.urun_kodu_input').forEach(input => {
+                        updateDatalistWithCodes(input, window.allCodes);
+                    });
                 }
 
             } catch (error) {
                 console.error("CRITICAL: Failed to load product codes", error);
-                alert("Ürün kodları yüklenemedi! Lütfen sayfayı yenileyin.\n" + error.message);
+                alert("Ürün kodları yüklenemedi! " + error.message);
             }
         }
 
-        // Init logic
         $(document).ready(function () {
             loadProductCodes();
         });
 
-
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            if (sidebar.classList.contains('-translate-x-full')) {
-                sidebar.classList.remove('-translate-x-full');
-            } else {
-                sidebar.classList.add('-translate-x-full');
-            }
+            sidebar.classList.toggle('-translate-x-full');
         }
 
         function normalizeKey(text) {
             return text.normalize("NFC").trim().toUpperCase();
         }
 
+        // --- ROW & PRODUCT LOGIC ---
+
+        function updateDatalistWithCodes(input, codes) {
+            const listId = input.getAttribute('list');
+            const dataList = document.getElementById(listId);
+            if (!dataList) return;
+
+            // Build options string for performance
+            let options = '';
+            // Limit to 200 items to prevent DOM freezing if list is huge?
+            // EPS codes are usually < 500, should be fine.
+            codes.forEach(code => {
+                options += `<option value="${code}">`;
+            });
+            dataList.innerHTML = options;
+        }
+
         function filterProductCodes(selectElement) {
-            const container = selectElement.closest('.siparis-satir') || document.getElementById('editForm') || selectElement.parentElement.parentElement;
-            const cinsiSelect = container.querySelector('.cinsi_select');
-            const kalinlikSelect = container.querySelector('.kalinlik_select');
-            const urunKoduSelect = container.querySelector('.urun_kodu_select');
+            const row = selectElement.closest('.siparis-satir') || selectElement.closest('div.space-y-2') || selectElement.closest('form');
+            // Fallback for Modal: .space-y-2 container or form
 
-            const cinsi = cinsiSelect.value;
-            const kalinlik = kalinlikSelect.value;
-            const currentCode = urunKoduSelect.getAttribute('data-value') || urunKoduSelect.value;
+            if (!row) return;
 
-            urunKoduSelect.innerHTML = '<option value="">Kod</option>';
+            const cinsi = row.querySelector('.cinsi_select').value;
+            const kalinlik = row.querySelector('.kalinlik_select').value;
 
-            if (cinsi && kalinlik) {
-                // Try standard lookup first
-                let key = cinsi + ' ' + kalinlik;
+            const urunInput = row.querySelector('.urun_kodu_input');
+            const urunSelect = row.querySelector('.urun_kodu_select');
 
+            // IF no type/thickness, show ALL codes (Only for Input version)
+            // For Select version, we might want to show empty or all. Standard behavior: Empty.
 
-                let codes = CINS_TO_BOYALI_MAP[key];
-                let method = "Direct";
+            const isInput = !!urunInput;
 
-                // Smart Lookup Fallback: Normalize and Search
-                if (!codes) {
-                    method = "Smart";
-                    const normalizedTarget = normalizeKey(key);
-                    const mapKeys = Object.keys(CINS_TO_BOYALI_MAP);
+            if (!cinsi || !kalinlik) {
+                if (isInput && window.allCodes) {
+                    updateDatalistWithCodes(urunInput, window.allCodes);
+                } else if (urunSelect) {
+                    urunSelect.innerHTML = '<option value="">Kod Seçin...</option>';
+                }
+                return;
+            }
 
-                    for (const mapKey of mapKeys) {
-                        if (normalizeKey(mapKey) === normalizedTarget) {
-                            codes = CINS_TO_BOYALI_MAP[mapKey];
-                            key = mapKey; // Use the found key
-                            break;
-                        }
+            const key = `${cinsi} ${kalinlik}`;
+            let codes = window.productMap[key];
+
+            if (!codes) {
+                // Try normalized lookup
+                const normalizedKey = normalizeKey(key);
+                for (const k of Object.keys(window.productMap)) {
+                    if (normalizeKey(k) === normalizedKey) {
+                        codes = window.productMap[k];
+                        break;
                     }
                 }
+            }
 
-                if (!codes) {
-                    console.error(`No codes found for key: ${key}`);
-                    // Debug helper for user
-                    // alert(`Kod listesi bulunamadı: ${key}`); 
-                    codes = [];
-                }
+            if (!codes) codes = [];
 
-                console.log("DEBUG: Found Codes:", codes);
-
+            if (isInput) {
+                updateDatalistWithCodes(urunInput, codes);
+            } else if (urunSelect) {
+                urunSelect.innerHTML = '<option value="">Kod Seçin...</option>';
                 codes.forEach(code => {
                     const option = document.createElement('option');
                     option.value = code;
                     option.textContent = code;
-                    urunKoduSelect.appendChild(option);
+                    urunSelect.appendChild(option);
                 });
 
-                // Compatibility: If currentCode is set but not in list, add it visually
-                if (currentCode) {
-                    let exists = false;
-                    for (let i = 0; i < urunKoduSelect.options.length; i++) {
-                        if (urunKoduSelect.options[i].value === currentCode) {
-                            exists = true;
-                            break;
-                        }
+                // If there's a data-value (edit modal), try to re-select it
+                const savedVal = urunSelect.getAttribute('data-value');
+                if (savedVal) urunSelect.value = savedVal;
+            }
+        }
+
+        function handleCodeInput(input) {
+            const code = input.value.trim().toUpperCase();
+
+            // Check Reverse Map
+            const key = window.reverseProductMap ? window.reverseProductMap[code] : null;
+
+            if (key) {
+                // Match found: Auto-select Cins & Kalinlik
+                const row = input.closest('.siparis-satir');
+                const cinsiSelect = row.querySelector('.cinsi_select');
+                const kalinlikSelect = row.querySelector('.kalinlik_select');
+
+                // Strategy: Find Kalinlik by suffix matching options
+                let foundKalinlik = null;
+                for (let opt of kalinlikSelect.options) {
+                    if (opt.value && key.endsWith(opt.value)) {
+                        foundKalinlik = opt.value;
+                        break;
+                    }
+                }
+
+                if (foundKalinlik) {
+                    const foundCinsi = key.substring(0, key.length - foundKalinlik.length).trim();
+
+                    // Verify Cins exists
+                    let cinsiExists = false;
+                    for (let opt of cinsiSelect.options) {
+                        if (opt.value === foundCinsi) { cinsiExists = true; break; }
                     }
 
-                    if (!exists) {
-                        const option = document.createElement('option');
-                        option.value = currentCode;
-                        option.textContent = currentCode + " (Mevcut)";
-                        urunKoduSelect.appendChild(option);
+                    if (cinsiExists) {
+                        // Apply Values
+                        cinsiSelect.value = foundCinsi;
+                        kalinlikSelect.value = foundKalinlik;
+
+                        // Update List (Filter)
+                        filterProductCodes(cinsiSelect);
+
+                        // Visual Feedback
+                        input.classList.remove('border-slate-300');
+                        input.classList.add('border-green-500', 'bg-green-50');
+                        setTimeout(() => input.classList.remove('border-green-500', 'bg-green-50', 'border-slate-300'), 1500);
                     }
-                    urunKoduSelect.value = currentCode;
                 }
             }
         }
 
-        // Add Row Logic
         let rowIndex = 0;
         function addRow(count = 1) {
             const container = document.getElementById('siparis-urun-container');
@@ -979,8 +1041,7 @@
                 rowIndex++;
                 const html = `
                     <div class="siparis-satir flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200" id="row-${rowIndex}">
-                        <select name="urun_kodu_${rowIndex}" class="hidden"></select> <!-- Compatibility placeholder -->
-
+                        <select name="urun_kodu_${rowIndex}" class="hidden"></select> <!-- Backend Compat -->
                         
                         <div class="flex-1 grid grid-cols-2 gap-2">
                              <select class="cinsi_select w-full text-xs rounded border-slate-300" name="cinsi_${rowIndex}" required onchange="filterProductCodes(this)">
@@ -992,10 +1053,16 @@
                                 ${KALINLIK_OPTIONS}
                              </select>
                         </div>
-                        <div class="w-1/4">
-                             <select class="urun_kodu_select w-full text-xs rounded border-slate-300" name="urun_kodu_${rowIndex}" required>
-                                 <option value="">Kod</option>
-                             </select>
+                        <div class="w-1/4 relative">
+                             <input type="text" 
+                                    name="urun_kodu_${rowIndex}" 
+                                    class="urun_kodu_input w-full text-xs rounded border-slate-300 uppercase font-mono" 
+                                    required 
+                                    placeholder="Kod" 
+                                    list="list_urun_kodu_${rowIndex}"
+                                    oninput="handleCodeInput(this)"
+                                    autocomplete="off">
+                             <datalist id="list_urun_kodu_${rowIndex}"></datalist>
                         </div>
                         <div class="w-1/5">
                              <input type="number" name="m2_${rowIndex}" placeholder="M²" required class="w-full text-xs rounded border-slate-300">
@@ -1006,8 +1073,14 @@
                     </div>
                 `;
                 container.insertAdjacentHTML('beforeend', html);
+
+                // Populate default list
+                const input = document.getElementById(`row-${rowIndex}`).querySelector('.urun_kodu_input');
+                if (window.allCodes) updateDatalistWithCodes(input, window.allCodes);
             }
         }
+
+
 
         // Modal Functions
         function closeModal(modalId) {

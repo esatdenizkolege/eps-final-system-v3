@@ -1,431 +1,539 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobil Stok & Sipariş Takip</title>
-    
-    <style>
-        /* --- GENEL STİL VE MOBİL İÇİN DÜZENLEME --- */
-        body { font-family: 'Inter', Arial, sans-serif; margin: 0; padding: 15px; background-color: #f8f9fa; color: #343a40; }
-        .container { max-width: 650px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); }
-        h1 { color: #007bff; font-size: 1.8em; text-align: center; margin-bottom: 25px; border-bottom: 3px solid #007bff; padding-bottom: 8px; }
-        h3 { font-size: 1.1em; color: #5a5a5a; margin-top: 10px; margin-bottom: 5px; }
+    <title>Mobil Üretim | EPS v3</title>
 
-        /* --- ACCORDION (Açılır/Kapanır) Stilleri --- */
+    <style>
+        /* --- DARK MODE STİL --- */
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 15px;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: auto;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+        }
+
+        h1 {
+            color: #60a5fa;
+            font-size: 1.5em;
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 12px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            font-size: 1.0em;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* --- ACCORDION (Açılır/Kapanır) --- */
         .accordion-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
-            background-color: #f0f8ff; /* Hafif mavi arka plan */
-            border: 1px solid #d0e8ff;
-            border-radius: 8px;
+            padding: 16px;
+            background-color: #334155;
+            border: 1px solid #475569;
+            border-radius: 12px;
             margin-top: 15px;
             cursor: pointer;
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #007bff;
-            transition: background-color 0.3s;
+            color: #f8fafc;
+            transition: all 0.2s;
         }
+
         .accordion-header:hover {
-            background-color: #e3f2ff;
+            background-color: #475569;
         }
+
+        .accordion-header.active {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
+
         .accordion-icon {
-            font-size: 1.5em;
+            font-size: 0.9em;
             transition: transform 0.3s;
-            line-height: 1; /* Dikey hizalama için */
+            opacity: 0.7;
         }
+
         .accordion-header.active .accordion-icon {
             transform: rotate(180deg);
+            opacity: 1;
         }
+
         .accordion-content {
-            background-color: white;
+            background-color: #1e293b;
             padding: 0 15px;
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.5s ease-in-out, padding 0.5s;
-            border-left: 1px solid #d0e8ff;
-            border-right: 1px solid #d0e8ff;
+            transition: max-height 0.4s ease-out, padding 0.4s;
+            border-left: 1px solid #334155;
+            border-right: 1px solid #334155;
         }
+
         .accordion-content.open {
-            max-height: 5000px; /* Yeterince büyük bir değer */
+            max-height: 5000px;
             padding: 15px;
-            border-bottom: 1px solid #d0e8ff;
-            border-radius: 0 0 8px 8px;
+            border-bottom: 1px solid #334155;
+            border-radius: 0 0 12px 12px;
         }
-        
+
         /* Tablo Stilleri */
-        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); border-radius: 8px; overflow: hidden; font-size: 0.9em; }
-        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        th { background-color: #007bff; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
-        tr:last-child td { border-bottom: none; }
-        .count-cell { font-weight: bold; color: #212529; }
-        
-        /* Durum ve Defisit Renkleri */
-        .status-bekliyor { background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
-        .status-tamamlandi { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
-        .deficit-red { color: #dc3545; font-weight: bold; }
-        .production-blue { color: #007bff; font-style: italic; }
-        
-        /* Yükleme ve Hata Mesajları */
-        .loading, .error { text-align: center; padding: 20px; font-size: 1.1em; border-radius: 5px; }
-        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-
-        /* Planlama Kutusu */
-        .plan-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
-        .plan-box { padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; }
-        .plan-box h3 { border-bottom: 2px solid; padding-bottom: 5px; margin-bottom: 10px; }
-        .siva-plan { background-color: #e6f7ff; border-color: #007bff; }
-        .siva-plan h3 { border-bottom-color: #007bff; color: #007bff; }
-        .sevkiyat-plan { background-color: #fff8e6; border-color: #ffc107; }
-        .sevkiyat-plan h3 { border-bottom-color: #ffc107; color: #ffc107; }
-        
-        /* Plan Detay Listesi (Yeni) */
-        .plan-detail-list { list-style: none; padding: 0; margin: 5px 0 10px 0; }
-        .plan-detail-list li { 
-            font-size: 0.85em; 
-            padding: 3px 0; 
-            border-bottom: 1px dotted #ccc;
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-bottom: 10px;
+            font-size: 0.85em;
+            color: #cbd5e1;
         }
 
-        /* --- SİPARİŞLER TABLO KAYDIRMA DÜZENLEMESİ (YENİ) --- */
+        th,
+        td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+
+        th {
+            background-color: #0f172a;
+            color: #94a3b8;
+            font-weight: 600;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .count-cell {
+            font-weight: bold;
+            color: #f8fafc;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Durum Badge */
+        .status-bekliyor {
+            background-color: rgba(234, 179, 8, 0.2);
+            color: #facc15;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.8em;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        .status-tamamlandi {
+            background-color: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.8em;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .deficit-red {
+            color: #f87171;
+            font-weight: bold;
+        }
+
+        .production-blue {
+            color: #60a5fa;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+
+        .loading,
+        .error {
+            text-align: center;
+            padding: 30px;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        .error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        /* Plan Kartları */
+        .plan-box {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #334155;
+            margin-bottom: 16px;
+        }
+
+        .plan-box h3 {
+            color: #94a3b8;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Customer Group Styles (Yeni) */
+        .customer-group {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+
+        .customer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .customer-name {
+            font-size: 0.85em;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        .customer-total {
+            font-size: 0.75em;
+            font-weight: 600;
+            background-color: #334155;
+            color: #94a3b8;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .product-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            padding: 4px 0;
+            border-top: 1px dashed #334155;
+        }
+
+        .product-code {
+            color: #94a3b8;
+            font-family: monospace;
+        }
+
+        .product-m2 {
+            color: #f8fafc;
+            font-weight: 600;
+        }
+
         .table-responsive {
-            overflow-x: auto; /* Yatay kaydırmayı etkinleştirir */
-            margin-top: 15px;
-            margin-bottom: 15px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
-        /* Sipariş tablosu için minimum genişlik */
-        #siparis-listesi table { 
-            min-width: 700px; /* Tablonun sığması için yeterli bir genişlik */
-            table-layout: auto; 
+        /* Buton */
+        #refreshButton {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            font-size: 0.9em !important;
+            transition: transform 0.2s, opacity 0.2s;
         }
-        #siparis-listesi th, #siparis-listesi td {
-            white-space: nowrap; /* Hücre içeriğinin kaydırılmasını sağlar */
+
+        #refreshButton:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.85em;
+            padding: 15px;
+            border: 1px dashed #334155;
+            border-radius: 8px;
         }
     </style>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto+Mono:wght@500&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
-        <h1>📱 Mobil Üretim Gözetim Paneli</h1>
-        
-        <button id="refreshButton" onclick="fetchData()" style="margin-bottom: 20px; background-color:#17a2b8; color: white; padding: 12px 15px; border: none; border-radius: 8px; width: 100%; font-size: 1.1em; cursor: pointer;">
+        <h1>📱 Mobil Üretim Paneli</h1>
+
+        <button id="refreshButton" onclick="fetchData()"
+            style="margin-bottom: 20px; color: white; padding: 14px 15px; border: none; border-radius: 10px; width: 100%; cursor: pointer;">
             🔄 Verileri Yenile
         </button>
 
         <div id="plan-ozeti-header" class="accordion-header" onclick="toggleAccordion('plan-ozeti-content')">
-            <h2>🚀 Üretim ve Sevkiyat Planı</h2>
+            <h2>🚀 Üretim ve Sevkiyat</h2>
             <span class="accordion-icon">▼</span>
         </div>
         <div id="plan-ozeti-content" class="accordion-content">
             <div id="plan-ozeti">
-                <div class="loading">Planlama verileri çekiliyor...</div>
+                <div class="loading">Veriler yükleniyor...</div>
             </div>
         </div>
 
         <div id="stok-tablosu-header" class="accordion-header" onclick="toggleAccordion('stok-tablosu-content')">
-            <h2>📦 Stok ve Eksik Analizi (M²)</h2>
+            <h2>📦 Stok Durumu</h2>
             <span class="accordion-icon">▼</span>
         </div>
         <div id="stok-tablosu-content" class="accordion-content">
-            <p style="font-size: 0.8em; color: #666; margin-bottom: 15px;">*Gözetim amaçlıdır. Veri girişi PC arayüzünden yapılır.</p>
             <div class="table-responsive">
                 <div id="stok-tablosu">
-                    <div class="loading">📦 Stok verileri çekiliyor...</div>
+                    <div class="loading">Stok verileri...</div>
                 </div>
             </div>
         </div>
-        
+
         <div id="siparis-listesi-header" class="accordion-header" onclick="toggleAccordion('siparis-listesi-content')">
-            <h2>📋 Tüm Siparişler</h2>
+            <h2>📋 Sipariş Listesi</h2>
             <span class="accordion-icon">▼</span>
         </div>
         <div id="siparis-listesi-content" class="accordion-content">
             <div class="table-responsive">
                 <div id="siparis-listesi">
-                    <div class="loading">📋 Sipariş verileri çekiliyor...</div>
+                    <div class="loading">Sipariş verileri...</div>
                 </div>
             </div>
         </div>
 
     </div>
-    
+
     <script>
-        // CRITICAL FIX: API URL'si güncellendi
-        const API_URL = "https://eps-final-system-v3-1.onrender.com/api/stok";
+        const API_URL = "/api/stok";
         const refreshButton = document.getElementById('refreshButton');
-        
-        // İlk yüklemede Plan ve Stok analizini hemen aç
+
         document.addEventListener('DOMContentLoaded', () => {
             fetchData();
-            // İlk açılışta Stok ve Planlama accordion'larını açık tutalım
-            const planHeader = document.getElementById('plan-ozeti-content').previousElementSibling;
-            const stokHeader = document.getElementById('stok-tablosu-content').previousElementSibling;
-            
-            if (planHeader && planHeader.classList.contains('accordion-header')) {
-                toggleAccordion('plan-ozeti-content');
-            }
-            if (stokHeader && stokHeader.classList.contains('accordion-header')) {
-                toggleAccordion('stok-tablosu-content');
-            }
+            toggleAccordion('plan-ozeti-content');
         });
-        
-        // --- ACCORDION JS FONKSİYONU ---
+
         function toggleAccordion(contentId) {
             const content = document.getElementById(contentId);
-            const header = content.previousElementSibling; // Header, content'ten bir önceki elementtir
-            
-            // Toggle 'open' class on content and 'active' class on header
+            const header = content.previousElementSibling;
             content.classList.toggle('open');
             header.classList.toggle('active');
         }
-        // --- ACCORDION JS FONKSİYONU SONU ---
 
-        // Yardımcı Fonksiyon: Sayıları okunaklı hale getirir
         function formatM2(m2) {
             if (m2 === null || m2 === undefined) return '0';
-            // Sayıyı Türkiye formatında (binlik ayracı nokta) ve tam sayı olarak döndür
             return parseFloat(m2).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
         }
 
         async function fetchData() {
-            // --- Butonu Kitleme ve Yükleme Mesajları ---
             refreshButton.disabled = true;
-            refreshButton.textContent = '⏳ Veriler Yükleniyor...';
+            refreshButton.innerHTML = '⏳ Yükleniyor...';
 
-            // Yükleme mesajlarını göster
-            document.getElementById('plan-ozeti').innerHTML = '<div class="loading">Planlama verileri çekiliyor...</div>';
-            document.getElementById('stok-tablosu').innerHTML = '<div class="loading">📦 Stok verileri çekiliyor...</div>';
-            document.getElementById('siparis-listesi').innerHTML = '<div class="loading">📋 Sipariş verileri çekiliyor...</div>';
-            
-            let success = false;
-            
             try {
                 const response = await fetch(API_URL);
-                
                 if (!response.ok) {
-                    // API'den gelen detaylı hata mesajını yakalamaya çalış
-                    const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen Hata', detail: `HTTP ${response.status}` }));
-                    throw new Error(`API erişim hatası: HTTP ${response.status}. Detay: ${errorData.detail || 'Sunucu detay vermedi.'}`);
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
                 }
                 const data = await response.json();
-                
+
                 renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
-                renderStok(data.stok, data.deficit_analysis); 
-                renderSiparisler(data.siparisler); 
-                success = true;
-                
+                renderStok(data.stok, data.deficit_analysis);
+                renderSiparisler(data.siparisler);
+
+                refreshButton.innerHTML = '✅ Güncel';
+                setTimeout(() => refreshButton.innerHTML = '🔄 Verileri Yenile', 2000);
+
             } catch (error) {
-                console.error("Fetch Error:", error); 
-                // Hata durumunda sadece ilk accordion'ı açıp hata mesajını göster
-                document.getElementById('plan-ozeti').innerHTML = `<div class="error">Bağlantı Hatası: API'ye ulaşılamıyor veya veri formatı hatalı. (${error.message})</div>`;
-                document.getElementById('stok-tablosu').innerHTML = '<div class="error">API Bağlantı Hatası</div>';
-                document.getElementById('siparis-listesi').innerHTML = '<div class="error">API Bağlantı Hatası</div>';
+                console.error("Fetch Error:", error);
+                document.getElementById('plan-ozeti').innerHTML = `<div class="error">Bağlantı Hatası: ${error.message}</div>`;
+                refreshButton.innerHTML = '⚠️ Hata Oluştu';
             } finally {
-                // --- Butonu Serbest Bırakma ---
                 refreshButton.disabled = false;
-                refreshButton.textContent = success ? '✅ Veriler Güncellendi' : '🔄 Verileri Yenile (Hata)';
-                setTimeout(() => { 
-                    if (refreshButton.textContent.includes('Güncellendi')) {
-                        refreshButton.textContent = '🔄 Verileri Yenile';
-                    }
-                }, 3000); // Başarılı mesajını 3 saniye sonra kaldır.
             }
         }
 
-        // Yeni Planlama Render Fonksiyonu (Detaylı Sıva Planı Desteği)
         function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
-            
             let html = `
-                <div style="margin-bottom: 10px; margin-top: 10px;">
-                    <p style="font-weight: bold; font-size: 1.1em; color: #007bff; margin-bottom: 5px;">
-                        Kapasite: ${formatM2(kapasite)} m²/gün
-                    </p>`;
+                <div style="margin: 15px 0; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #60a5fa; font-weight: 600; font-size: 0.9em;">Kapasite</span>
+                    <span style="color: #f8fafc; font-weight: 700;">${formatM2(kapasite)} m²/gün</span>
+                </div>`;
 
-            if (toplam_eksi_m2 > 0) {
-                html += `<p style="font-weight: bold; color: darkred; font-size: 0.9em;">
-                            Toplam Sıva M² Eksiği: ${formatM2(toplam_eksi_m2)} m²
-                        </p>`;
+            // 1. SIVA PLANI
+            html += `<div class="plan-box"><h3>🧱 Sıva Planı</h3>`;
+            const sivaKeys = Object.keys(sivaPlan).sort((a, b) => parseInt(a) - parseInt(b));
+
+            if (sivaKeys.length > 0) {
+                sivaKeys.forEach(gun => {
+                    const gunlukUretim = Array.isArray(sivaPlan[gun]) ? sivaPlan[gun] : Object.values(sivaPlan[gun]);
+                    const toplamM2 = gunlukUretim.reduce((sum, item) => sum + item.m2, 0);
+
+                    html += `<div style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 4px;">
+                            <span style="color: #94a3b8; font-size: 0.85em; font-weight: 600;">Gün ${gun}</span>
+                            <span style="color: #60a5fa; font-weight: 700; font-size: 0.85em;">${formatM2(toplamM2)} m²</span>
+                        </div>
+                        <ul class="product-list">`;
+                    gunlukUretim.forEach(item => {
+                        html += `<li class="product-item">
+                                <span style="color: #cbd5e1;">${item.cinsi}</span>
+                                <span class="product-m2">${formatM2(item.m2)}</span>
+                            </li>`;
+                    });
+                    html += `</ul></div>`;
+                });
             } else {
-                        html += `<p style="font-weight: bold; color: green; font-size: 0.9em;">
-                            Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor.
-                        </p>`;
+                html += `<div class="no-data">Üretim ihtiyacı yok.</div>`;
             }
             html += `</div>`;
-            
-            html += `
-            <div class="plan-grid">
-                <div class="plan-box siva-plan">
-                    <h3>🧱 Sıva Üretim Planı (5 Gün)</h3>`;
-                    
-                    const sivaKeys = Object.keys(sivaPlan).sort((a, b) => parseInt(a) - parseInt(b));
-                    
-                    if (sivaKeys.length > 0) {
-                        sivaKeys.forEach(gun => {
-                            const gunlukUretim = Array.isArray(sivaPlan[gun]) ? sivaPlan[gun] : Object.values(sivaPlan[gun]);
 
-                            const toplamM2 = gunlukUretim.reduce((sum, item) => sum + item.m2, 0);
+            // 2. SEVKİYAT PLANI (YENİ FORMAT: Date -> Customer -> Items)
+            html += `<div class="plan-box" style="border-color: rgba(245, 158, 11, 0.3);">
+                    <h3 style="color: #fbbf24;">🚚 Sevkiyat Planı</h3>`;
 
-                            html += `<h4 style="margin: 8px 0 2px 0; color: #0056b3;">
-                                        Gün ${gun} - Toplam: ${formatM2(toplamM2)} m²
-                                    </h4>
-                                    <ul class="plan-detail-list">`;
-                                
-                                gunlukUretim.forEach(item => {
-                                    // SIVA PLANINDA HANGI CİNSE NE KADAR SIVA ATILACAĞI GÖSTERİLİYOR
-                                    html += `<li>${item.cinsi}: <b>${formatM2(item.m2)} m²</b></li>`; 
-                                });
+            const sevkiyatKeys = Object.keys(sevkiyatPlan).sort();
 
-                            html += `</ul>`;
+            if (sevkiyatKeys.length > 0) {
+                sevkiyatKeys.forEach(tarih => {
+                    const musteriler = sevkiyatPlan[tarih];
+                    let gunlukToplam = 0;
+                    Object.values(musteriler).forEach(urunListesi => {
+                        gunlukToplam += urunListesi.reduce((sum, i) => sum + i.bekleyen_m2, 0);
+                    });
+
+                    html += `<div style="margin-top: 15px;">
+                                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                    <span style="background: #fbbf24; color: #1e293b; font-weight: bold; font-size: 0.75em; padding: 2px 6px; border-radius: 4px;">${tarih}</span>
+                                    <span style="color: #94a3b8; font-size: 0.8em;">Toplam: ${formatM2(gunlukToplam)} m²</span>
+                                </div>
+                                <div style="padding-left: 5px; border-left: 2px solid #334155;">`;
+
+                    for (const [musteri, urunler] of Object.entries(musteriler)) {
+                        const musteriToplam = urunler.reduce((sum, i) => sum + i.bekleyen_m2, 0);
+                        html += `<div class="customer-group">
+                                    <div class="customer-header">
+                                        <span class="customer-name">${musteri}</span>
+                                        <span class="customer-total">${formatM2(musteriToplam)} m²</span>
+                                    </div>
+                                    <ul class="product-list">`;
+                        urunler.forEach(item => {
+                            html += `<li class="product-item">
+                                        <span class="product-code">${item.urun_kodu}</span>
+                                        <span class="product-m2">${formatM2(item.bekleyen_m2)}</span>
+                                     </li>`;
                         });
-                    } else {
-                        html += `<p style="font-size: 0.9em; color: green; font-weight: 500;">Önümüzdeki 5 gün için Sıva ihtiyacı yok.</p>`;
+                        html += `   </ul>
+                                 </div>`;
                     }
-                    html += `
-                </div>
-
-                <div class="plan-box sevkiyat-plan">
-                    <h3>🚚 Sevkiyat Planı (5 Gün)</h3>`;
-                    const sevkiyatKeys = Object.keys(sevkiyatPlan).sort();
-                    
-                    if (sevkiyatKeys.length > 0) {
-                        sevkiyatKeys.forEach(tarih => {
-                            const sevkiyatlar = Array.isArray(sevkiyatPlan[tarih]) ? sevkiyatPlan[tarih] : Object.values(sevkiyatPlan[tarih]);
-                            const toplamM2 = sevkiyatlar.reduce((sum, s) => sum + s.bekleyen_m2, 0);
-
-                            html += `
-                                <h4 style="margin: 8px 0 2px 0; color: #cc8400;">
-                                        ${tarih} (${formatM2(toplamM2)} m²)
-                                    </h4>
-                                    <ul class="plan-detail-list">`;
-                                    sevkiyatlar.forEach(s => {
-                                        html += `<li>- ${s.urun_kodu} / ${s.musteri}: <b>${formatM2(s.bekleyen_m2)} m²</b></li>`;
-                                    });
-                            html += `</ul>`;
-                        });
-                    } else {
-                        html += `<p style="font-size: 0.9em; font-weight: 500;">Önümüzdeki 5 gün terminli sevkiyat yok.</p>`;
-                    }
-
-                    html += `
-                </div>
-            </div>`;
+                    html += `   </div>
+                             </div>`;
+                });
+            } else {
+                html += `<div class="no-data">Planlanan sevkiyat yok.</div>`;
+            }
+            html += `</div>`;
 
             document.getElementById('plan-ozeti').innerHTML = html;
         }
 
-
         function renderStok(stokData, deficitAnalysis) {
-            // Başlıklar: Aşama/Cins | M² | Eksik Sıvalı M² | Eksik Ham M²
-            let html = '<table><tr><th>Aşama/Cins</th><th>M²</th><th>Sıvalı Eksik</th><th>Ham Eksik</th></tr>';
-            
-            // --- KRİTİK HATA DÜZELTİLDİ: Sadece string metotlarını string'ler üzerinde çağırıyoruz.
-            const sortedKeys = Object.keys(stokData).sort((a, b) => {
-                const keyA = a.substring(0, a.lastIndexOf(' (')).trim();
-                const asamaA = a.substring(a.lastIndexOf('(') + 1, a.lastIndexOf(')'));
-                
-                const keyB = b.substring(0, b.lastIndexOf(' (')).trim();
-                const asamaB = b.substring(b.lastIndexOf('(') + 1, b.lastIndexOf(')'));
-                
-                if (keyA !== keyB) return keyA.localeCompare(keyB);
-                
-                const orderMap = {'Ham': 0, 'Sivali': 1};
-                return orderMap[asamaA] - orderMap[asamaB];
-            });
-            // --- KRİTİK HATA DÜZELTİLDİ SONU ---
-            
+            let html = '<table><tr><th>Ürün (Cins/Boyut)</th><th>Stok</th><th>Eksik</th></tr>';
+            const sortedKeys = Object.keys(stokData).sort();
+            let hasData = false;
+
             sortedKeys.forEach(key => {
                 const value = stokData[key];
-                
-                // Key'i "BAROK 2 CM (Ham)" formatından "BAROK 2 CM" formatına çevirir
-                const itemKey = key.substring(0, key.lastIndexOf(' (')).trim(); 
+                const itemKey = key.substring(0, key.lastIndexOf(' (')).trim();
                 const asama = key.substring(key.lastIndexOf('(') + 1, key.lastIndexOf(')'));
-                const deficitInfo = deficitAnalysis[itemKey]; 
-                
-                let sivaliDeficitText = '-';
-                let hamDeficitText = '-';
-                let sivaliDeficit = 0;
-                let hamDeficit = 0;
-                let hamCoverage = 0;
+                const deficitInfo = deficitAnalysis[itemKey];
+                let deficitHTML = '';
 
-                // Defisit Değerlerini Hesapla/Al
-                if (deficitInfo) {
-                    sivaliDeficit = deficitInfo.sivali_deficit || 0;
-                    hamDeficit = deficitInfo.ham_deficit || 0;
-                    hamCoverage = deficitInfo.ham_coverage || 0;
-                }
-                
-                // SIVALI Satırı
-                if (asama === 'Sivali') {
-                    if (sivaliDeficit > 0) {
-                        sivaliDeficitText = `<span class="deficit-red">${formatM2(sivaliDeficit)} m² EKSİK</span>`;
-                    }
-                } 
-                
-                // HAM Satırı
-                if (asama === 'Ham') {
-                    if (hamDeficit > 0) {
-                        hamDeficitText = `<span class="deficit-red">${formatM2(hamDeficit)} m² EKSİK</span>`;
-                    } 
-                    if (hamCoverage > 0) {
-                            sivaliDeficitText = `<span class="production-blue">(Üretim Planı: ${formatM2(hamCoverage)} m²)</span>`;
-                    }
+                if (deficitInfo && asama === 'Sivali' && deficitInfo.sivali_deficit > 0) {
+                    deficitHTML = `<span class="deficit-red">-${formatM2(deficitInfo.sivali_deficit)}</span>`;
+                } else if (deficitInfo && asama === 'Ham' && deficitInfo.ham_deficit > 0) {
+                    deficitHTML = `<span class="deficit-red">-${formatM2(deficitInfo.ham_deficit)}</span>`;
                 }
 
-                // Sıfır Stokları Gizleme Mantığı (Sadece Pozitif/Negatif stok veya eksik sipariş varsa göster)
-                if (value !== 0 || sivaliDeficit > 0 || hamDeficit > 0) {
-                    html += `<tr>
-                        <td>${key.replace(` (${asama})`, '')}</td>
-                        <td class="count-cell">${formatM2(value)} m²</td>
-                        <td>${sivaliDeficitText}</td>
-                        <td>${hamDeficitText}</td>
+                if (value !== 0 || deficitHTML !== '') {
+                    hasData = true;
+                    // Ham / Sıvalı ayrımı
+                    const rowStyle = asama === 'Ham' ? 'color: #94a3b8;' : 'color: #e2e8f0; font-weight: 500;';
+                    html += `<tr style="${rowStyle}">
+                        <td>${key.replace(' (Sivali)', '').replace(' (Ham)', '')} <span style="font-size:0.7em; opacity:0.6; border:1px solid #475569; padding: 0 4px; border-radius: 3px;">${asama}</span></td>
+                        <td class="count-cell">${formatM2(value)}</td>
+                        <td>${deficitHTML}</td>
                     </tr>`;
                 }
             });
-
             html += '</table>';
+
+            if (!hasData) html = '<div class="no-data">Stok kaydı bulunamadı.</div>';
+
             document.getElementById('stok-tablosu').innerHTML = html;
         }
 
         function renderSiparisler(siparisler) {
-            const tumSiparisler = siparisler; 
-            
-            // Başlıklar: Sip. Tarihi, Müşteri, Ürün, M², Durum, Termin, Sıvalı Zemin (Gün)
-            let html = '<table><tr><th>Sip. Tarihi</th><th>Müşteri</th><th>Ürün</th><th>M²</th><th>Durum</th><th>Termin</th><th>Zemin (Gün)</th></tr>';
+            let html = '<table><tr><th>Müşteri</th><th style="text-align:right">M²</th><th>Tarih/Durum</th></tr>';
 
-            if (tumSiparisler.length === 0) {
-                html += '<tr><td colspan="7" style="text-align:center; color:#666; font-weight:bold; padding: 20px;">Aktif veya tamamlanmış sipariş bulunmamaktadır.</td></tr>';
+            if (siparisler.length === 0) {
+                html = '<div class="no-data">Sipariş bulunmuyor.</div>';
             } else {
-                tumSiparisler.forEach(s => {
+                siparisler.forEach(s => {
                     let statusClass = s.durum === 'Bekliyor' ? 'status-bekliyor' : 'status-tamamlandi';
-                    let bekleyenM2 = s.durum === 'Bekliyor' ? `${formatM2(s.bekleyen_m2)} m²` : '0 m²';
-                    
-                    let planlananGunText = '-';
-                    if (s.durum === 'Bekliyor') {
-                        if (s.planlanan_is_gunu === 0) {
-                            planlananGunText = `<span style="color: green;">Stoktan (0)</span>`;
-                        } else if (s.planlanan_is_gunu > 0) {
-                            planlananGunText = `<b>${s.planlanan_is_gunu} Gün</b>`;
-                        } else {
-                            planlananGunText = `Kapasite Yok`;
-                        }
-                    }
-                    
-                    html += `<tr>
-                        <td>${s.siparis_tarihi}</td>
-                        <td>${s.musteri}</td>
-                        <td>${s.urun_kodu}</td>
-                        <td class="count-cell">${bekleyenM2}</td>
-                        <td><span class="${statusClass}">${s.durum.toUpperCase()}</span></td>
-                        <td>${s.termin_tarihi}</td>
-                        <td>${planlananGunText}</td>
+                    let rowOpacity = s.durum === 'Tamamlandi' ? '0.6' : '1';
+                    html += `<tr style="opacity: ${rowOpacity}">
+                        <td>
+                            <div style="font-weight: 600; color: #f8fafc;">${s.musteri}</div>
+                            <div style="font-size: 0.8em; color: #94a3b8; font-family:monospace;">${s.urun_kodu}</div>
+                        </td>
+                        <td style="text-align:right; font-weight:bold; color: #f8fafc;">
+                            ${formatM2(s.bekleyen_m2)}
+                        </td>
+                        <td>
+                            <div style="font-size: 0.8em; margin-bottom: 2px;">${s.termin_tarihi}</div>
+                            <span class="${statusClass}">${s.durum}</span>
+                        </td>
                     </tr>`;
                 });
+                html += '</table>';
             }
-            html += '</table>';
             document.getElementById('siparis-listesi').innerHTML = html;
         }
     </script>
 </body>
+
 </html>

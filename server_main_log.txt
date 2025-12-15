@@ -1,0 +1,37 @@
+Veritabaný baþarýyla baþlatýldý (Mod: SQLite).
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.10.20:5000
+Press CTRL+C to quit
+[2025-12-15 13:16:39,887] ERROR in app: Exception on / [HEAD]
+Traceback (most recent call last):
+  File "C:\Users\ESAT\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\ESAT\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\ESAT\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ~^^^^^^^^^^^^^^^^^
+  File "C:\Users\ESAT\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\ESAT\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\ESAT\.gemini\antigravity\scratch\eps_final_system_v3\app.py", line 569, in index
+    cur.execute("""
+    ~~~~~~~~~~~^^^^
+        SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        AND kalinlik ILIKE %s
+        ^^^^^^^^^^^^^^^^^^^^^
+    """, (cinsi, kalinlik))
+    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ESAT\.gemini\antigravity\scratch\eps_final_system_v3\app.py", line 181, in execute
+    return self.cursor.execute(sql_sqlite, params if params is not None else ())
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: near "ILIKE": syntax error
+127.0.0.1 - - [15/Dec/2025 13:16:39] "HEAD / HTTP/1.1" 500 -

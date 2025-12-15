@@ -1214,14 +1214,17 @@ def api_stok_verileri():
         conn.close()
 
         formatted_sevkiyat_plan_detay = {}
-        for k, v in sevkiyat_plan_detay.items():
-            formatted_sevkiyatlar = []
-            for item in v:
-                item_dict = dict(item)
-                if 'termin_tarihi' in item_dict and item_dict['termin_tarihi']:
-                    item_dict['termin_tarihi'] = item_dict['termin_tarihi'].isoformat()
-                formatted_sevkiyatlar.append(item_dict)
-            formatted_sevkiyat_plan_detay[k] = formatted_sevkiyatlar
+        for tarih, musteriler in sevkiyat_plan_detay.items():
+            formatted_musteriler = {}
+            for musteri, urunler in musteriler.items():
+                formatted_urunler = []
+                for item in urunler:
+                    item_dict = dict(item)
+                    if 'termin_tarihi' in item_dict and item_dict['termin_tarihi']:
+                        item_dict['termin_tarihi'] = item_dict['termin_tarihi'].isoformat()
+                    formatted_urunler.append(item_dict)
+                formatted_musteriler[musteri] = formatted_urunler
+            formatted_sevkiyat_plan_detay[tarih] = formatted_musteriler
             
         toplam_bekleyen_siparis_m2_api = sum(s['bekleyen_m2'] for s in siparis_listesi if s['durum'] == 'Bekliyor')
 
