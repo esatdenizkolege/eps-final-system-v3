@@ -822,26 +822,58 @@
         </div>
     </div>
 
+    <!-- VISUAL DEBUGGER -->
+    <div id="debug-panel"
+        class="fixed bottom-0 right-0 bg-black/80 text-white p-4 text-xs font-mono z-50 max-w-sm rounded-tl-lg shadow-lg pointer-events-none">
+        <h3 class="font-bold border-b border-gray-600 mb-1">DEBUG MONITOR</h3>
+        <div id="debug-api-status" class="text-yellow-400">API: Loading...</div>
+        <div id="debug-last-key" class="mt-1">Last Key: -</div>
+        <div id="debug-lookup-result" class="mt-1 text-gray-400">Result: -</div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
     <script>
         let CINS_TO_BOYALI_MAP = {}; // Will be loaded from API
-        const CINSLER = {{ CINSLER | tojson }};
-        const KALINLIKLAR = {{ KALINLIKLAR | tojson }};
+        // Use 'var' to avoid block-scope redeclaration issues if any
+        var CINSLER = {{ CINSLER | tojson }};
+        var KALINLIKLAR = {{ KALINLIKLAR | tojson }};
 
         const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
         const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
 
+        function updateDebug(elementId, text, colorClass = "") {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.innerText = text;
+                if (colorClass) el.className = colorClass;
+            }
+        }
+
         // Load Product Codes from API
         async function loadProductCodes() {
             try {
+                updateDebug('debug-api-status', 'API: Fetching...', 'text-blue-400');
                 const response = await fetch('/api/urun_kodlari');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
                 CINS_TO_BOYALI_MAP = await response.json();
-                console.log("DEBUG: Product Map Loaded via API", Object.keys(CINS_TO_BOYALI_MAP).length, "keys");
+                const keyCount = Object.keys(CINS_TO_BOYALI_MAP).length;
+                console.log("DEBUG: Product Map Loaded via API", keyCount, "keys");
+
+                updateDebug('debug-api-status', `API: OK (${keyCount} Keys Loaded)`, 'text-green-400');
+
+                // Initialize the first row AFTER data is loaded to ensure consistency
+                const container = document.getElementById('siparis-urun-container');
+                if (container && container.children.length === 0) {
+                    addRow(1);
+                }
+
             } catch (error) {
                 console.error("CRITICAL: Failed to load product codes", error);
-                alert("Ürün kodları yüklenemedi! Lütfen sayfayı yenileyin.");
+                updateDebug('debug-api-status', `API ERROR: ${error.message}`, 'text-red-500 font-bold');
+                alert("Ürün kodları yüklenemedi! Lütfen sayfayı yenileyin.\n" + error.message);
             }
         }
 
@@ -860,6 +892,10 @@
             }
         }
 
+        function normalizeKey(text) {
+            return text.normalize("NFC").trim().toUpperCase();
+        }
+
         function filterProductCodes(selectElement) {
             const container = selectElement.closest('.siparis-satir') || document.getElementById('editForm') || selectElement.parentElement.parentElement;
             const cinsiSelect = container.querySelector('.cinsi_select');
@@ -870,15 +906,42 @@
             const kalinlik = kalinlikSelect.value;
             const currentCode = urunKoduSelect.getAttribute('data-value') || urunKoduSelect.value;
 
-            urunKoduSelect.innerHTML = '<option value="">Seçiniz...</option>';
+            urunKoduSelect.innerHTML = '<option value="">Kod</option>';
 
             if (cinsi && kalinlik) {
-                const key = cinsi + ' ' + kalinlik;
-                console.log("DEBUG: Testing Key:", key); // DEBUG
-                console.log("DEBUG: Available Keys:", Object.keys(CINS_TO_BOYALI_MAP)); // DEBUG
+                // Try standard lookup first
+                let key = cinsi + ' ' + kalinlik;
+                updateDebug('debug-last-key', `Values: [${cinsi}] + [${kalinlik}]`);
 
-                const codes = CINS_TO_BOYALI_MAP[key] || [];
-                console.log("DEBUG: Found Codes:", codes); // DEBUG
+                let codes = CINS_TO_BOYALI_MAP[key];
+                let method = "Direct";
+
+                // Smart Lookup Fallback: Normalize and Search
+                if (!codes) {
+                    method = "Smart";
+                    const normalizedTarget = normalizeKey(key);
+                    const mapKeys = Object.keys(CINS_TO_BOYALI_MAP);
+
+                    for (const mapKey of mapKeys) {
+                        if (normalizeKey(mapKey) === normalizedTarget) {
+                            codes = CINS_TO_BOYALI_MAP[mapKey];
+                            key = mapKey; // Use the found key
+                            break;
+                        }
+                    }
+                }
+
+                if (!codes) {
+                    updateDebug('debug-lookup-result', `❌ Not Found (Tried: ${method})`, 'text-red-400');
+                    console.error(`No codes found for key: ${key}`);
+                    // Debug helper for user
+                    // alert(`Kod listesi bulunamadı: ${key}`); 
+                    codes = [];
+                } else {
+                    updateDebug('debug-lookup-result', `✅ Found ${codes.length} codes (${method})`, 'text-green-400');
+                }
+
+                console.log("DEBUG: Found Codes:", codes);
 
                 codes.forEach(code => {
                     const option = document.createElement('option');
@@ -887,8 +950,8 @@
                     urunKoduSelect.appendChild(option);
                 });
 
+                // Compatibility: If currentCode is set but not in list, add it visually
                 if (currentCode) {
-                    // Check if current code exists in generated options
                     let exists = false;
                     for (let i = 0; i < urunKoduSelect.options.length; i++) {
                         if (urunKoduSelect.options[i].value === currentCode) {
@@ -905,6 +968,9 @@
                     }
                     urunKoduSelect.value = currentCode;
                 }
+            } else {
+                updateDebug('debug-last-key', "Waiting for selection...");
+                updateDebug('debug-lookup-result', "-");
             }
         }
 
@@ -965,7 +1031,7 @@
             const kalinlikSelect = form.querySelector('.kalinlik_select');
             const urunSelect = form.querySelector('.urun_kodu_select');
 
-            cinsiSelect.value = cinsi.toUpperCase();
+            cinsiSelect.value = cinsi.toUpperCase(); // Ensure uppercase for select matching
             kalinlikSelect.value = kalinlik.toUpperCase();
 
             // Set value efficiently to trigger filter
@@ -1036,19 +1102,30 @@
             document.getElementById('undo_siparis_id').value = id;
         }
 
+        // Global Error Handler
+        window.onerror = function (msg, url, line, col, error) {
+            const debugEl = document.getElementById('debug-api-status');
+            if (debugEl) debugEl.innerHTML = `JS ERROR: ${msg} (Line ${line})`;
+            console.error("Global Error:", msg, error);
+            return false;
+        };
+
         // Init DataTables and Defaults
         $(document).ready(function () {
-            $('#ordersTable').DataTable({
-                responsive: true,
-                language: { url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json" },
-                pageLength: 25,
-                order: [[5, "asc"]] // Sort by Termin Tarihi (Index 5 now)
-            });
-        });
+            try {
+                $('#ordersTable').DataTable({
+                    responsive: true,
+                    language: { url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json" },
+                    pageLength: 25,
+                    order: [[5, "asc"]] // Sort by Termin Tarihi (Index 5 now)
+                });
 
-        // Add initial row
-        addRow(1);
-        console.log("DEBUG: Frontend Script Ready");
+                console.log("DEBUG: Frontend Script Initialized Successfully");
+            } catch (e) {
+                console.error("Init Error:", e);
+                alert("Başlatma Hatası: " + e.message);
+            }
+        });
     </script>
 </body>
 

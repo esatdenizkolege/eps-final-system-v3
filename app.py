@@ -6,8 +6,11 @@ from flask import Flask, render_template_string, request, redirect, url_for, jso
 
 # PostgreSQL'e bağlanmak için psycopg2 kütüphanesini kullanıyoruz.
 import psycopg2 
-# Sorgu sonuçlarını sözlük (dict) olarak almak için
 from psycopg2.extras import RealDictCursor 
+
+# Yerel geliştirme için SQLite
+import sqlite3
+ 
 
 import json
 import unicodedata
@@ -152,17 +155,91 @@ CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
 URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
 
 
-# --- 1. VERİTABANI İŞLEMLERİ VE BAŞLANGIÇ (POSTGRESQL) ---
+# --- 1. VERİTABANI İŞLEMLERİ VE BAŞLANGIÇ (POSTGRESQL + SQLITE) ---
+
+class SQLiteCursorWrapper:
+    """
+    SQLite cursor'ını sarar ve PostgreSQL tarzı (%s) sorguları SQLite tarzına (?) çevirir.
+    Ayrıca fetch işlemlerini yönetir.
+    """
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    def execute(self, sql, params=None):
+        # Postgres %s yer tutucularını SQLite ? ile değiştir
+        sql_sqlite = sql.replace('%s', '?')
+        
+        # PostgreSQL SERIAL -> SQLite INTEGER PRIMARY KEY AUTOINCREMENT
+        if "SERIAL PRIMARY KEY" in sql_sqlite.upper():
+            sql_sqlite = sql_sqlite.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+        
+        # PostgreSQL ILIKE -> SQLite LIKE (Yerel geliştirme için yeterli)
+        sql_sqlite = sql_sqlite.replace(' ILIKE ', ' LIKE ')
+        
+        # Helper to convert params if necessary (e.g. Booleans to 0/1 if SQLite doesn't handle them automatically)
+        # SQLite handles True/False as 1/0 usually, but safer to force if needed.
+        # psycopg2 adapts automatically. sqlite3 default adapter works for standard types.
+        
+        try:
+            return self.cursor.execute(sql_sqlite, params if params is not None else ())
+        except Exception as e:
+            print(f"SQLite Execute Error: {e} | SQL: {sql_sqlite}")
+            raise e
+
+    def fetchone(self):
+        return self.cursor.fetchone()
+
+    def fetchall(self):
+        return self.cursor.fetchall()
+
+    def close(self):
+        self.cursor.close()
+        
+    @property
+    def rowcount(self):
+        return self.cursor.rowcount
+        
+    @property
+    def description(self):
+        return self.cursor.description
+
+class SQLiteConnectionWrapper:
+    """SQLite bağlantısını sarar ve cursor() çağrıldığında wrapper döndürür."""
+    def __init__(self, conn):
+        self.conn = conn
+
+    def cursor(self):
+        return SQLiteCursorWrapper(self.conn.cursor())
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
 
 def get_db_connection():
-    """PostgreSQL veritabanı bağlantısını açar."""
-    if not DATABASE_URL:
-        raise Exception("DATABASE_URL ortam değişkeni Render'da tanımlı değil. Bağlantı kurulamıyor.")
+    """Veritabanı bağlantısını açar (Render'da Postgres, Yerelde SQLite)."""
     
-    # RealDictCursor, bağlantıdan oluşturulan tüm imleçlerin sözlük (dict) döndürmesini sağlar.
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    
-    return conn
+    if DATABASE_URL:
+        # Render / Production (PostgreSQL)
+        try:
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+            return conn
+        except Exception as e:
+            print(f"PostgreSQL Bağlantı Hatası: {e}")
+            raise e
+    else:
+        # Yerel Geliştirme (SQLite)
+        # RealDictCursor gibi davranması için row_factory tanımlıyoruz
+        def dict_factory(cursor, row):
+            d = {}
+            for idx, col in enumerate(cursor.description):
+                d[col[0]] = row[idx]
+            return d
+
+        conn = sqlite3.connect('envanter.db') # Yerel dosya
+        conn.row_factory = dict_factory
+        return SQLiteConnectionWrapper(conn)
 
 def init_db():
     """Veritabanını ve tabloları oluşturur."""
@@ -171,6 +248,7 @@ def init_db():
         cur = conn.cursor()
         
         # Stok Tablosu
+        # Not: Wrapper sınıfı SERIAL -> INTEGER PRIMARY KEY dönüşümünü halleder.
         cur.execute(""" 
             CREATE TABLE IF NOT EXISTS stok ( 
                 id SERIAL PRIMARY KEY, 
@@ -230,6 +308,7 @@ def init_db():
         conn.commit()
         cur.close()
         conn.close()
+        print("Veritabanı başarıyla başlatıldı (Mod: " + ("PostgreSQL" if DATABASE_URL else "SQLite") + ").")
     except Exception as e:
         print(f"Veritabanı Başlatma Hatası: {e}")
 
