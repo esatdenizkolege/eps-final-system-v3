@@ -1266,9 +1266,9 @@ def api_siparis_analizi():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Query active orders from 'siparisler' table
+        # Query active orders with Type/Thickness from DB
         cur.execute("""
-            SELECT musteri, bekleyen_m2, urun_kodu, siparis_tarihi, termin_tarihi
+            SELECT musteri, bekleyen_m2, urun_kodu, siparis_tarihi, termin_tarihi, cinsi, kalinlik
             FROM siparisler
             WHERE durum = 'Bekliyor'
         """)
@@ -1276,17 +1276,6 @@ def api_siparis_analizi():
         
         cur.close()
         conn.close()
-
-        # REVERSE LOOKUP MAP (Code -> "Type Thickness")
-        # Reuse global or reload to be safe
-        global CINS_TO_BOYALI_MAP
-        if not CINS_TO_BOYALI_MAP:
-             CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
-        
-        code_to_desc = {}
-        for desc, codes in CINS_TO_BOYALI_MAP.items():
-            for c in codes:
-                code_to_desc[c] = desc
 
         # Aggregation Logic
         analysis = {} 
@@ -1299,9 +1288,10 @@ def api_siparis_analizi():
                  kod = row['urun_kodu']
                  s_tarih = row['siparis_tarihi']
                  t_tarih = row['termin_tarihi']
+                 cinsi = row['cinsi']
+                 kalinlik = row['kalinlik']
             else:
-                 # Ensure order matches SELECT
-                 musteri, bekleyen, kod, s_tarih, t_tarih = row
+                 musteri, bekleyen, kod, s_tarih, t_tarih, cinsi, kalinlik = row
             
             # Normalize Code
             if not kod:
@@ -1316,24 +1306,28 @@ def api_siparis_analizi():
 
             if bekleyen_val <= 0.01: continue 
 
-            if kod not in analysis:
-                # Find description
-                aciklama = code_to_desc.get(kod, "")
+            # Composite Key to separate generic "BOYASIZ" codes by Type/Thickness
+            # Use tuple (Code, Cinsi, Kalinlik) as key
+            composite_key = (kod, cinsi, kalinlik)
+
+            if composite_key not in analysis:
+                # Use DB values for description
+                aciklama = f"{cinsi} {kalinlik}" if cinsi and kalinlik else ""
                 
-                analysis[kod] = {
+                analysis[composite_key] = {
                     "urun_kodu": kod,
-                    "aciklama": aciklama, # NEW FIELD
+                    "aciklama": aciklama, 
                     "toplam_bekleyen": 0.0,
                     "detaylar": []
                 }
             
-            analysis[kod]["toplam_bekleyen"] += bekleyen_val
+            analysis[composite_key]["toplam_bekleyen"] += bekleyen_val
             
             # Format dates
             s_str = s_tarih.isoformat() if hasattr(s_tarih, 'isoformat') else str(s_tarih) if s_tarih else "-"
             t_str = t_tarih.isoformat() if hasattr(t_tarih, 'isoformat') else str(t_tarih) if t_tarih else "-"
 
-            analysis[kod]["detaylar"].append({
+            analysis[composite_key]["detaylar"].append({
                 "musteri": musteri,
                 "bekleyen_m2": round(bekleyen_val, 2),
                 "siparis_tarihi": s_str,

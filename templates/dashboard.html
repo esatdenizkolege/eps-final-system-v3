@@ -1412,7 +1412,8 @@
                     </div>
                     <div class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded group-hover:bg-blue-100">${item.toplam_bekleyen.toLocaleString('tr-TR')} m²</div>
                 `;
-                div.onclick = () => showAnalysisDetail(item.urun_kodu);
+                // Pass OBJECT, not ID (to handle duplicates like "BOYASIZ")
+                div.onclick = () => showAnalysisDetail(item);
                 listContainer.appendChild(div);
             });
         }
@@ -1421,23 +1422,31 @@
             query = query.trim().toUpperCase();
 
             // 1. Filter List
-            const filtered = window.analysisData.filter(item => item.urun_kodu.includes(query));
+            const filtered = window.analysisData.filter(item => {
+                const searchStr = (item.urun_kodu + " " + (item.aciklama || "")).toUpperCase();
+                return searchStr.includes(query);
+            });
             renderAnalysis(filtered);
 
-            // 2. Auto-Select if perfect match (Optional UX improvement requested)
-            // User said: "write code and see details".
+            // 2. Auto-Select if perfect match on CODE
             const exactMatch = window.analysisData.find(item => item.urun_kodu === query);
 
             if (exactMatch) {
-                showAnalysisDetail(exactMatch.urun_kodu);
-            } else if (query === '') {
-                // Reset Detail View if search cleared? Maybe keep it.
-                // Let's reset if nothing selected.
+                showAnalysisDetail(exactMatch);
             }
         }
 
-        function showAnalysisDetail(code) {
-            const item = window.analysisData.find(x => x.urun_kodu === code);
+        function showAnalysisDetail(param) {
+            let item;
+            if (typeof param === 'string') {
+                // Fallback for string ID (picks first match)
+                item = window.analysisData.find(x => x.urun_kodu === param);
+            } else {
+                // Object reference (Preferred)
+                item = param;
+            }
+
+            if (!item) return;
             if (!item) return;
 
             // Update Header
