@@ -1259,5 +1259,72 @@ def mobil_gorunum():
 
 
 
+@app.route('/api/siparis_analizi')
+def api_siparis_analizi():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Fetch active orders
+        cur.execute("""
+            SELECT b.musteri_adi, b.m2, b.hazirlanan_m2, b.urun_kodu, b.siparis_tarihi, b.termin_tarihi
+            FROM boyali_siparis_takip_tablo b
+            WHERE b.durum != 'Tamamlandı'
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Aggregation Logic
+        analysis = {} # Code -> {total_pending, details: []}
+
+        for row in rows:
+            musteri, m2, hazirlanan, kod, s_tarih, t_tarih = row
+            
+            # Normalize Code
+            if not kod:
+                kod = "BİLİNMEYEN"
+            kod = kod.strip().upper()
+
+            # Calculate Pending
+            try:
+                m2_val = float(m2) if m2 else 0
+                hazirlanan_val = float(hazirlanan) if hazirlanan else 0
+                bekleyen = m2_val - hazirlanan_val
+                if bekleyen < 0: bekleyen = 0
+            except:
+                bekleyen = 0
+
+            if bekleyen <= 0.01: continue # Skip if basically done
+
+            if kod not in analysis:
+                analysis[kod] = {
+                    "urun_kodu": kod,
+                    "toplam_bekleyen": 0.0,
+                    "detaylar": []
+                }
+            
+            analysis[kod]["toplam_bekleyen"] += bekleyen
+            analysis[kod]["detaylar"].append({
+                "musteri": musteri,
+                "bekleyen_m2": round(bekleyen, 2),
+                "siparis_tarihi": str(s_tarih),
+                "termin_tarihi": str(t_tarih)
+            })
+
+        # Convert to list and Sort by Total Pending Descending
+        result = list(analysis.values())
+        result.sort(key=lambda x: x['toplam_bekleyen'], reverse=True)
+        
+        # Round final totals
+        for item in result:
+            item['toplam_bekleyen'] = round(item['toplam_bekleyen'], 2)
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error in Analysis API: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)
