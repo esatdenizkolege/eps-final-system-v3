@@ -540,88 +540,85 @@ def calculate_planning(conn):
 
 @app.route('/', methods=['GET'])
 def index():
-    try:
-        """Ana PC arayüzünü (veri giriş ve kapsamlı tablolar) gösterir."""
-        conn = get_db_connection() 
-        cur = conn.cursor()
-        message = request.args.get('message')
-        gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
+    """Ana PC arayüzünü (veri giriş ve kapsamlı tablolar) gösterir."""
+    conn = get_db_connection() 
+    cur = conn.cursor()
+    message = request.args.get('message')
+    gunluk_siva_m2 = load_data(KAPASITE_FILE)['gunluk_siva_m2']
+    
+    # *** KRİTİK DÜZELTME: JSON verilerini ve değişkenleri HER SAYFA YÜKLEMEDE ZORLA YENİDEN YÜKLE ***
+    global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
+    
+    # 1. JSON'dan verileri yükle (Güncel listeleri al)
+    KALINLIKLAR = load_kalinliklar()
+    CINSLER = load_cinsler()
+    VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
+    CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
+    print(f"DEBUG: Loaded Map Keys Count: {len(CINS_TO_BOYALI_MAP)}") # DEBUG
+    if len(CINS_TO_BOYALI_MAP) > 0:
+        print(f"DEBUG: Sample Key: {list(CINS_TO_BOYALI_MAP.keys())[0]}")
         
-        # *** KRİTİK DÜZELTME: JSON verilerini ve değişkenleri HER SAYFA YÜKLEMEDE ZORLA YENİDEN YÜKLE ***
-        global KALINLIKLAR, CINSLER, VARYANTLAR, CINS_TO_BOYALI_MAP, URUN_KODLARI
-        
-        # 1. JSON'dan verileri yükle (Güncel listeleri al)
-        KALINLIKLAR = load_kalinliklar()
-        CINSLER = load_cinsler()
-        VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
-        CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
-        print(f"DEBUG: Loaded Map Keys Count: {len(CINS_TO_BOYALI_MAP)}") # DEBUG
-        if len(CINS_TO_BOYALI_MAP) > 0:
-            print(f"DEBUG: Sample Key: {list(CINS_TO_BOYALI_MAP.keys())[0]}")
-            
-        URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
-        
-        # Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
-        with app.app_context():
-            init_db() 
+    URUN_KODLARI = sorted(list(set(code for codes in CINS_TO_BOYALI_MAP.values() for code in codes)))
+    
+    # Yeni eklenen Cins/Kalınlıkların Stok tablosuna otomatik girmesini sağla
+    with app.app_context():
+        init_db() 
 
-        # 2. Planlama ve Stok Haritasını Hesapla
-        toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
+    # 2. Planlama ve Stok Haritasını Hesapla
+    toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
+    
+    # 3. Stok ve Eksik Analizi Listesini Oluştur
+    stok_list = []
+    for cinsi_raw, kalinlik_raw in VARYANTLAR:
         
-        # 3. Stok ve Eksik Analizi Listesini Oluştur
-        stok_list = []
-        for cinsi_raw, kalinlik_raw in VARYANTLAR:
-            
-            cinsi = cinsi_raw.strip().upper()
-            kalinlik = kalinlik_raw.strip().upper()
-            key = (cinsi, kalinlik)
-            
-            ham_m2 = stok_map.get(key, {}).get('Ham', 0)
-            sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
-            
-            cur.execute(""" 
-                SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
-                FROM siparisler 
-                WHERE durum='Bekliyor' 
-                AND cinsi ILIKE %s 
-                AND kalinlik ILIKE %s 
-            """, (cinsi, kalinlik))
-            
-            bekleyen_m2_raw = cur.fetchone()
-            
-            gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
+        cinsi = cinsi_raw.strip().upper()
+        kalinlik = kalinlik_raw.strip().upper()
+        key = (cinsi, kalinlik)
+        
+        ham_m2 = stok_map.get(key, {}).get('Ham', 0)
+        sivali_m2 = stok_map.get(key, {}).get('Sivali', 0)
+        
+        cur.execute(""" 
+            SELECT COALESCE(SUM(bekleyen_m2), 0) as toplam_m2 
+            FROM siparisler 
+            WHERE durum='Bekliyor' 
+            AND cinsi ILIKE %s 
+            AND kalinlik ILIKE %s 
+        """, (cinsi, kalinlik))
+        
+        bekleyen_m2_raw = cur.fetchone()
+        
+        gerekli_siparis_m2 = bekleyen_m2_raw['toplam_m2']
 
-            sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
-            ham_eksik = max(0, sivali_eksik - ham_m2)
-            
-            stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
+        sivali_eksik = max(0, gerekli_siparis_m2 - sivali_m2)
+        ham_eksik = max(0, sivali_eksik - ham_m2)
         
-        cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
-        siparisler = cur.fetchall() 
-        next_siparis_kodu = get_next_siparis_kodu(conn)
-        today = datetime.now().strftime('%Y-%m-%d')
-        
-        # TOPLAM BEKLEYEN SİPARİŞ M2'Yİ HESAPLA
-        toplam_bekleyen_siparis_m2 = sum(s['bekleyen_m2'] for s in siparisler if s['durum'] == 'Bekliyor')
-        
-        # Tarih nesnelerini HTML uyumlu string'e çevir
-        siparis_listesi = []
-        for s in siparisler:
-            # DEBUG LOGGING FOR STATUS
-            print(f"DEBUG: Siparis ID: {s['id']}, Durum: '{s['durum']}', Bekleyen: {s['bekleyen_m2']}, Musteri: {s['musteri']}")
-            s_dict = dict(s) 
-            if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
-                s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
-            if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
-                s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
-            siparis_listesi.append(s_dict)
-        
-        cur.close()
-        conn.close()
-        
-        return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
-    except Exception as e:
-        return f"CRITICAL ERROR: {str(e)} <br><pre>{traceback.format_exc()}</pre>"
+        stok_list.append({'cinsi': cinsi, 'kalinlik': kalinlik, 'ham_m2': ham_m2, 'sivali_m2': sivali_m2, 'gerekli_siparis_m2': gerekli_siparis_m2, 'sivali_eksik': sivali_eksik, 'ham_eksik': ham_eksik})
+    
+    cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
+    siparisler = cur.fetchall() 
+    next_siparis_kodu = get_next_siparis_kodu(conn)
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    # TOPLAM BEKLEYEN SİPARİŞ M2'Yİ HESAPLA
+    toplam_bekleyen_siparis_m2 = sum(s['bekleyen_m2'] for s in siparisler if s['durum'] == 'Bekliyor')
+    
+    # Tarih nesnelerini HTML uyumlu string'e çevir
+    siparis_listesi = []
+    for s in siparisler:
+        # DEBUG LOGGING FOR STATUS
+        print(f"DEBUG: Siparis ID: {s['id']}, Durum: '{s['durum']}', Bekleyen: {s['bekleyen_m2']}, Musteri: {s['musteri']}")
+        s_dict = dict(s) 
+        if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
+            s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
+        if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
+            s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
+        siparis_listesi.append(s_dict)
+    
+    cur.close()
+    conn.close()
+    
+    return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
 
 # --- KRİTİK VERİ KURTARMA ROTASI ---
 @app.route('/admin/data_repair', methods=['GET'])
