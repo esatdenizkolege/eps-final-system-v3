@@ -113,15 +113,21 @@
             </div>
 
             <nav class="flex-1 overflow-y-auto p-4 space-y-2">
-                <!-- 1. Yeni Sipariş Girişi -->
+                <!-- 1. Ana Sayfa (Dashboard) -->
+                <a href="#" onclick="showSection('section-dashboard', this)"
+                    class="nav-item block px-4 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+                    <i class="fa-solid fa-house w-6"></i> Ana Sayfa
+                </a>
+
+                <!-- 2. Yeni Sipariş Girişi -->
                 <a href="#" onclick="showSection('section-new-order', this)"
                     class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
                     <i class="fa-solid fa-plus-circle w-6"></i> Yeni Sipariş Girişi
                 </a>
 
-                <!-- 2. Bekleyen Siparişler (Default Active) -->
+                <!-- 3. Bekleyen Siparişler -->
                 <a href="#" onclick="showSection('section-pending-orders', this)"
-                    class="nav-item block px-4 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+                    class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
                     <i class="fa-solid fa-clipboard-list w-6"></i> Bekleyen Siparişler
                 </a>
 
@@ -1400,7 +1406,10 @@
                 const div = document.createElement('div');
                 div.className = "flex justify-between items-center bg-white p-3 rounded border border-gray-200 hover:bg-blue-50 cursor-pointer transition select-none group";
                 div.innerHTML = `
-                    <div class="font-bold text-gray-700">${item.urun_kodu}</div>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-gray-700">${item.urun_kodu}</span>
+                        ${item.aciklama ? `<span class="text-[10px] text-gray-400 font-normal">(${item.aciklama})</span>` : ''}
+                    </div>
                     <div class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded group-hover:bg-blue-100">${item.toplam_bekleyen.toLocaleString('tr-TR')} m²</div>
                 `;
                 div.onclick = () => showAnalysisDetail(item.urun_kodu);

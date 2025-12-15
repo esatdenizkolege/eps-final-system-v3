@@ -1277,6 +1277,17 @@ def api_siparis_analizi():
         cur.close()
         conn.close()
 
+        # REVERSE LOOKUP MAP (Code -> "Type Thickness")
+        # Reuse global or reload to be safe
+        global CINS_TO_BOYALI_MAP
+        if not CINS_TO_BOYALI_MAP:
+             CINS_TO_BOYALI_MAP = load_data('urun_kodlari.json')
+        
+        code_to_desc = {}
+        for desc, codes in CINS_TO_BOYALI_MAP.items():
+            for c in codes:
+                code_to_desc[c] = desc
+
         # Aggregation Logic
         analysis = {} 
 
@@ -1306,8 +1317,12 @@ def api_siparis_analizi():
             if bekleyen_val <= 0.01: continue 
 
             if kod not in analysis:
+                # Find description
+                aciklama = code_to_desc.get(kod, "")
+                
                 analysis[kod] = {
                     "urun_kodu": kod,
+                    "aciklama": aciklama, # NEW FIELD
                     "toplam_bekleyen": 0.0,
                     "detaylar": []
                 }
