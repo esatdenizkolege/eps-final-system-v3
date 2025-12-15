@@ -868,7 +868,22 @@
                     urunKoduSelect.appendChild(option);
                 });
 
-                if (currentCode && codes.includes(currentCode)) {
+                if (currentCode) {
+                    // Check if current code exists in generated options
+                    let exists = false;
+                    for (let i = 0; i < urunKoduSelect.options.length; i++) {
+                        if (urunKoduSelect.options[i].value === currentCode) {
+                            exists = true;
+                            break;
+                        }
+                    }
+
+                    if (!exists) {
+                        const option = document.createElement('option');
+                        option.value = currentCode;
+                        option.textContent = currentCode + " (Mevcut)";
+                        urunKoduSelect.appendChild(option);
+                    }
                     urunKoduSelect.value = currentCode;
                 }
             }

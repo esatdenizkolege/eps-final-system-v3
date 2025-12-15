@@ -702,22 +702,35 @@ def handle_siparis_islem():
             yeni_termin_tarihi = request.form['yeni_termin_tarihi'] # YENİ ALAN
             
             # Ürün kodundan cins/kalınlık tespiti
-            cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
-            if not cins_kalinlik_key:
-                raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
-                    
-            parts = cins_kalinlik_key.rsplit(' ', 2)
-            if len(parts) == 3:
-                yeni_cinsi_raw = parts[0]
-                yeni_kalinlik_raw = f"{parts[1]} {parts[2]}"
-            elif len(parts) == 2:
-                yeni_cinsi_raw = parts[0]
-                yeni_kalinlik_raw = parts[1]
-            else:
-                raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık formatı hatalı: {cins_kalinlik_key}")
+            # Check existing order first
+            cur.execute("SELECT urun_kodu, cinsi, kalinlik FROM siparisler WHERE id = %s", (siparis_id,))
+            current_order = cur.fetchone()
+            
+            yeni_cinsi = None
+            yeni_kalinlik = None
 
-            yeni_cinsi = yeni_cinsi_raw.strip().upper()
-            yeni_kalinlik = yeni_kalinlik_raw.strip().upper()
+            if current_order and current_order['urun_kodu'] == yeni_urun_kodu:
+                # Code unchanged, keep existing Cins/Kalinlik (preserve legacy codes)
+                yeni_cinsi = current_order['cinsi']
+                yeni_kalinlik = current_order['kalinlik']
+            else:
+                # Code changed, validation required
+                cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
+                if not cins_kalinlik_key:
+                     # Fallback: If not in map, just accept it (for flexibility) but log warning
+                     # Or better: raise error only if it's a NEW code not in map.
+                     # But for now, let's keep validation strictly for NEW codes.
+                     raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
+                
+                parts = cins_kalinlik_key.rsplit(' ', 2)
+                if len(parts) == 3:
+                     yeni_cinsi = parts[0].strip().upper()
+                     yeni_kalinlik = f"{parts[1]} {parts[2]}".strip().upper()
+                elif len(parts) == 2:
+                     yeni_cinsi = parts[0].strip().upper()
+                     yeni_kalinlik = parts[1].strip().upper()
+                else:
+                     raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık formatı hatalı")
 
             print(f"DEBUG: Editing Order {siparis_id}. New Customer: {yeni_musteri}, Code: {yeni_urun_kodu}, Date: {yeni_termin_tarihi}") # DEBUG LOG
 
