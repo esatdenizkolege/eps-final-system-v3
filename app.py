@@ -183,6 +183,18 @@ def init_db():
             ); 
         """)
 
+        # Sipariş Geçmişi Tablosu (Kısmi Tamamlama Logları)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS siparis_gecmisi (
+                id SERIAL PRIMARY KEY,
+                siparis_id INTEGER NOT NULL,
+                islem_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                islem_tipi TEXT NOT NULL, -- 'Kismi', 'GeriAl' vb.
+                miktar INTEGER NOT NULL,
+                FOREIGN KEY (siparis_id) REFERENCES siparisler(id) ON DELETE CASCADE
+            );
+        """)
+
         # YENİ: Cinsler ve Kalınlıklar değişebileceği için VARYANTLAR'ı yeniden hesapla
         global KALINLIKLAR, CINSLER, VARYANTLAR
         KALINLIKLAR = load_kalinliklar()
@@ -490,6 +502,8 @@ def index():
     # Tarih nesnelerini HTML uyumlu string'e çevir
     siparis_listesi = []
     for s in siparisler:
+        # DEBUG LOGGING FOR STATUS
+        print(f"DEBUG: Siparis ID: {s['id']}, Durum: '{s['durum']}', Bekleyen: {s['bekleyen_m2']}, Musteri: {s['musteri']}")
         s_dict = dict(s) 
         if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
             s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
@@ -500,7 +514,7 @@ def index():
     cur.close()
     conn.close()
     
-    return render_template_string(HTML_TEMPLATE, stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
+    return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
 
 # --- KRİTİK VERİ KURTARMA ROTASI ---
 @app.route('/admin/data_repair', methods=['GET'])
@@ -682,6 +696,7 @@ def handle_siparis_islem():
         # KRİTİK DÜZELTME: SİPARİŞİ DÜZENLEME (Termin Tarihi Eklendi)
         elif action == 'duzenle_siparis':
             siparis_id = request.form['siparis_id']
+            yeni_musteri = request.form['yeni_musteri'] # YENİ ALAN: Müşteri Adı
             yeni_urun_kodu = request.form['yeni_urun_kodu']
             yeni_m2 = int(request.form['yeni_m2'])
             yeni_termin_tarihi = request.form['yeni_termin_tarihi'] # YENİ ALAN
@@ -704,13 +719,15 @@ def handle_siparis_islem():
             yeni_cinsi = yeni_cinsi_raw.strip().upper()
             yeni_kalinlik = yeni_kalinlik_raw.strip().upper()
 
+            print(f"DEBUG: Editing Order {siparis_id}. New Customer: {yeni_musteri}, Code: {yeni_urun_kodu}, Date: {yeni_termin_tarihi}") # DEBUG LOG
+
             cur.execute("""
                 UPDATE siparisler SET 
-                urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s, termin_tarihi = %s
-                WHERE id = %s AND durum = 'Bekliyor'
-            """, (yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_termin_tarihi, siparis_id))
+                musteri = %s, urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s, termin_tarihi = %s
+                WHERE id = %s 
+            """, (yeni_musteri, yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_termin_tarihi, siparis_id))
             
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m². Yeni Termin: {yeni_termin_tarihi}"
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_musteri}, {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m². Yeni Termin: {yeni_termin_tarihi}"
 
         # YENİ EK: Kısmi Tamamlama
         elif action == 'kismi_tamamla':
@@ -728,13 +745,78 @@ def handle_siparis_islem():
                     # Tamamen bitti
                     cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
                     message = f"✅ Sipariş ID {siparis_id} TAMAMLANDI. ({hazirlanan_m2} m² düşüldü, kalan sıfırlandı)."
+                
+                    # Log to History
+                    cur.execute("INSERT INTO siparis_gecmisi (siparis_id, islem_tipi, miktar) VALUES (%s, 'Kismi', %s)", (siparis_id, hazirlanan_m2))
+
                 else:
                     # Kısmi bitti
                     cur.execute("UPDATE siparisler SET bekleyen_m2 = %s WHERE id = %s", (yeni_bekleyen, siparis_id))
                     message = f"✅ Sipariş ID {siparis_id} güncellendi. {hazirlanan_m2} m² düşüldü. KALAN: {yeni_bekleyen} m²."
+                    
+                    # Log to History
+                    cur.execute("INSERT INTO siparis_gecmisi (siparis_id, islem_tipi, miktar) VALUES (%s, 'Kismi', %s)", (siparis_id, hazirlanan_m2))
+
                 conn.commit()
             else:
                 raise ValueError("Sipariş bulunamadı.")
+
+        # YENİ: Geçmişten Kısmi İşlemi Geri Alma
+        elif action == 'geri_al_kismi':
+            gecmis_id = request.form['gecmis_id']
+            
+            # Geçmiş kaydını bul
+            cur.execute("SELECT siparis_id, miktar FROM siparis_gecmisi WHERE id = %s", (gecmis_id,))
+            gecmis_row = cur.fetchone()
+            
+            if gecmis_row:
+                siparis_id = gecmis_row['siparis_id']
+                miktar = gecmis_row['miktar']
+                
+                # Siparişi bul ve miktarı geri ekle
+                cur.execute("SELECT bekleyen_m2, durum FROM siparisler WHERE id = %s", (siparis_id,))
+                siparis_row = cur.fetchone()
+                
+                if siparis_row:
+                    yeni_bekleyen = siparis_row['bekleyen_m2'] + miktar
+                    
+                    # Eğer sipariş 'Tamamlandi' ise tekrar 'Bekliyor'a çek
+                    if siparis_row['durum'] == 'Tamamlandi':
+                        cur.execute("UPDATE siparisler SET durum = 'Bekliyor', bekleyen_m2 = %s WHERE id = %s", (yeni_bekleyen, siparis_id))
+                    else:
+                        cur.execute("UPDATE siparisler SET bekleyen_m2 = %s WHERE id = %s", (yeni_bekleyen, siparis_id))
+                    
+                    # Geçmiş kaydını sil
+                    cur.execute("DELETE FROM siparis_gecmisi WHERE id = %s", (gecmis_id,))
+                    conn.commit()
+                    message = f"✅ Kısmi işlem geri alındı: {miktar} m² siparişe geri eklendi."
+                else:
+                    raise ValueError("Bağlı sipariş bulunamadı.")
+            else:
+                raise ValueError("Geçmiş kaydı bulunamadı.")
+
+
+        # YENİ EK: Tamamlanan Siparişi Geri Alma (Undo)
+        elif action == 'geri_al_tamamla':
+            siparis_id = request.form['siparis_id']
+            geri_alinacak_m2 = int(request.form['geri_alinacak_m2'])
+            
+            if geri_alinacak_m2 <= 0:
+                raise ValueError("Geri alınacak miktar 0'dan büyük olmalıdır.")
+
+            cur.execute("SELECT durum FROM siparisler WHERE id = %s", (siparis_id,))
+            row = cur.fetchone()
+            
+            if row and row['durum'] == 'Tamamlandi':
+                cur.execute("""
+                    UPDATE siparisler 
+                    SET durum = 'Bekliyor', bekleyen_m2 = %s, planlanan_is_gunu = 0 
+                    WHERE id = %s
+                """, (geri_alinacak_m2, siparis_id))
+                conn.commit()
+                message = f"✅ Sipariş ID {siparis_id} geri alındı. Bekleyen Miktar: {geri_alinacak_m2} m²."
+            else:
+                raise ValueError("Bu sipariş zaten tamamlanmamış veya bulunamadı.")
 
         # YENİ EK: Siparişi Kalıcı Silme (İz bırakmaz)
         elif action == 'sil_siparis':
@@ -768,6 +850,28 @@ def ayarla_kapasite():
     except ValueError as e: message = f"❌ Hata: {str(e)}"
     except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
     return redirect(url_for('index', message=message))
+
+# YENİ ROTA: Sipariş Geçmişi
+@app.route('/api/siparis_gecmisi/<int:siparis_id>', methods=['GET'])
+def get_siparis_gecmisi(siparis_id):
+    """Siparişin geçmiş işlemlerini JSON olarak döndürür."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id, islem_tarihi, miktar, islem_tipi FROM siparis_gecmisi WHERE siparis_id = %s ORDER BY islem_tarihi DESC", (siparis_id,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    # Datetime nesnelerini stringe çevir
+    history = []
+    for row in rows:
+        history.append({
+            'id': row['id'],
+            'tarih': row['islem_tarihi'].strftime('%d.%m.%Y %H:%M'),
+            'miktar': row['miktar'],
+            'tip': row['islem_tipi']
+        })
+    return jsonify(history)
 
 # YENİ ROTA: Zemin Kalınlığı ve Cins Ekleme
 @app.route('/ayarla/kalinlik', methods=['POST'])
@@ -1022,623 +1126,7 @@ def mobil_gorunum():
     return render_template('stok_goruntule.html')
 
 
-# --- HTML ŞABLONU (PC Arayüzü) ---
 
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <title>EPS Panel Yönetimi</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
-    <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
-    
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 0 15px rgba(0, 0, 0, 0.1); }
-        h1, h2, h3 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-
-        /* --- ÇERÇEVELİ FORM STİLİ --- */
-        .form-box { 
-            border: 2px solid #007bff; 
-            padding: 15px; 
-            border-radius: 8px; 
-            background-color: #e6f0ff; 
-            margin-bottom: 20px;
-        }
-        .form-box h2 { 
-            margin-top: 0; 
-            border-bottom: 2px solid #007bff; 
-            color: #007bff;
-            font-size: 1.3em;
-            padding-bottom: 8px;
-        }
-        .form-box .form-section { background: none; padding: 0; margin-bottom: 10px; }
-        
-        /* --- DİĞER STİLLER --- */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; word-wrap: break-word; }
-        th { background-color: #007bff; color: white; }
-        .message { padding: 10px; margin-bottom: 15px; border-radius: 4px; font-weight: bold; }
-        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .deficit-ham { color: red; font-weight: bold; } 
-        .deficit-sivali { color: darkred; font-weight: bold; } 
-        
-        button { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        
-        input[type="number"], input[type="text"], input[type="date"], select { 
-            padding: 8px; 
-            margin: 5px 5px 5px 0;
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
-            box-sizing: border-box; 
-        }
-        
-        .siparis-satir { 
-            display: flex; 
-            gap: 10px; 
-            align-items: center; 
-            margin-bottom: 10px;
-            padding: 8px;
-            border: 1px dotted #ccc;
-            border-radius: 4px;
-        }
-        .siparis-satir button { padding: 4px 8px; font-size: 0.8em; }
-
-        /* Tablo Genişlikleri ve Kaydırma */
-        .table-responsive { overflow-x: auto; margin-top: 15px; }
-        .siparis-table { min-width: 1100px; table-layout: auto; }
-        .siparis-table th:nth-child(10) { width: 250px; } 
-        
-        .siparis-header-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 30px;
-        }
-        .bekleyen-m2-tag {
-            background-color: #f0f0f0;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #333;
-        }
-        /* DataTables Özelleştirmesi */
-        #siparis-table_wrapper { margin-top: 15px; }
-        .dataTables_filter { margin-bottom: 10px; }
-        .dataTables_filter label { font-weight: bold; }
-
-        /* MODAL STİLİ (Düzenleme için Kullanıcı Dostu Arayüz) */
-        .modal {
-            display: none; 
-            position: fixed;
-            z-index: 10; 
-            left: 0;
-            top: 0;
-            width: 100%; 
-            height: 100%; 
-            overflow: auto; 
-            background-color: rgba(0,0,0,0.4); 
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 10% auto; 
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%; 
-            max-width: 500px;
-            border-radius: 8px;
-        }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
-    </style>
-    <script>
-        const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
-
-        const CINSLER = {{ CINSLER | tojson }};
-        const KALINLIKLAR = {{ KALINLIKLAR | tojson }};
-        
-        const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
-        const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
-
-        const ROW_TEMPLATE = (index) => `
-            <div class="siparis-satir" data-index="${index}">
-                <select class="cinsi_select" name="cinsi_${index}" required onchange="filterProductCodes(this)" style="width: 120px;">
-                    <option value="">Cins Seçin</option>
-                    ${CINS_OPTIONS}
-                </select>
-                <select class="kalinlik_select" name="kalinlik_${index}" required onchange="filterProductCodes(this)" style="width: 90px;">
-                    <option value="">Kalınlık Seçin</option>
-                    ${KALINLIK_OPTIONS}
-                </select>
-                <select class="urun_kodu_select" name="urun_kodu_${index}" required style="width: 100px;">
-                    <option value="">Ürün Kodu Seçin</option>
-                </select>
-                <input type="number" name="m2_${index}" min="1" required placeholder="M²" style="width: 70px;">
-                <button type="button" onclick="removeRow(this)" style="background-color: #dc3545; width: auto;">X</button>
-            </div>
-        `;
-
-        function filterProductCodes(selectElement) {
-            const container = selectElement.closest('.siparis-satir') || document.getElementById('edit-modal-form');
-            const cinsiSelect = container.querySelector('.cinsi_select');
-            const kalinlikSelect = container.querySelector('.kalinlik_select');
-            const urunKoduSelect = container.querySelector('.urun_kodu_select');
-            
-            const cinsi = cinsiSelect.value;
-            const kalinlik = kalinlikSelect.value;
-            
-            // Eğer burası modal ise, mevcut seçimi koruyabiliriz.
-            const currentCode = urunKoduSelect.value;
-            
-            urunKoduSelect.innerHTML = '<option value="">Ürün Kodu Seçin</option>'; 
-            
-            if (cinsi && kalinlik) {
-                const key = cinsi + ' ' + kalinlik;
-                const codes = CINS_TO_BOYALI_MAP[key] || [];
-                
-                if (codes.length > 0) {
-                    codes.forEach(code => {
-                        const option = document.createElement('option');
-                        option.value = code;
-                        option.textContent = code;
-                        urunKoduSelect.appendChild(option);
-                    });
-                    // Mevcut kodu yeniden seç
-                    if (currentCode && codes.includes(currentCode)) {
-                        urunKoduSelect.value = currentCode;
-                    }
-                } else {
-                    const option = document.createElement('option');
-                    option.value = '';
-                    option.textContent = 'Kod bulunamadı';
-                    urunKoduSelect.appendChild(option);
-                }
-            }
-        }
-
-        let siparisSatirIndex = 0;
-        
-        function addRow(count = 1) {
-            const container = document.getElementById('siparis-urun-container');
-            for (let i = 0; i < count; i++) {
-                const newHtml = ROW_TEMPLATE(siparisSatirIndex);
-                container.insertAdjacentHTML('beforeend', newHtml);
-                siparisSatirIndex++;
-            }
-        }
-
-        function removeRow(buttonElement) {
-            const row = buttonElement.closest('.siparis-satir');
-            row.remove();
-        }
-
-        // --- DÜZENLEME MODALI FONKSİYONU (Kullanıcı Dostu UI) ---
-        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin_tarihi) {
-            // Modalı göster
-            document.getElementById('editModal').style.display = 'block';
-            
-            // Verileri forma yükle
-            const form = document.getElementById('edit-modal-form');
-            form.action = '/siparis'; 
-            
-            form.querySelector('input[name="siparis_id"]').value = id;
-            form.querySelector('input[name="yeni_m2"]').value = m2;
-            form.querySelector('input[name="yeni_termin_tarihi"]').value = termin_tarihi;
-            form.querySelector('input[name="yeni_urun_kodu_hidden"]').value = urun_kodu; // Geçici olarak sakla
-            
-            const cinsiSelect = form.querySelector('.cinsi_select');
-            const kalinlikSelect = form.querySelector('.kalinlik_select');
-            
-            // Cins ve Kalınlık değerlerini seç
-            const cinsiKey = cinsi.toUpperCase();
-            const kalinlikKey = kalinlik.toUpperCase();
-            
-            cinsiSelect.value = cinsiKey;
-            kalinlikSelect.value = kalinlikKey;
-            
-            // Ürün kodlarını filtrele ve doğru kodu seç
-            filterProductCodes(cinsiSelect); // Kodları doldur
-            form.querySelector('.urun_kodu_select').value = urun_kodu; // Doğru kodu seç
-            
-            form.querySelector('input[name="yeni_urun_kodu_hidden"]').value = ''; // Temizle
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModal').style.display = 'none';
-        }
-        
-        // Modalın dışına tıklayınca kapanması
-        window.onclick = function(event) {
-            const modal = document.getElementById('editModal');
-            if (event.target == modal) {
-                modal.style.display = "none";
-            }
-        }
-        
-        // Modal içindeki select değişince ürün kodu listesini güncelle
-        document.addEventListener('DOMContentLoaded', () => {
-            // DataTable'ı başlat (Filtreleme için)
-            $('#siparis-table').DataTable({
-                "language": {
-                    "url": "https://cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json"
-                },
-                "scrollX": true,
-                "paging": true,
-                "ordering": true,
-                "info": false,
-                "searching": true // Tüm sütunlarda arama
-            });
-
-            // İlk açılışta 5 satırı otomatik ekle
-            addRow(5);  
-
-            // Modal Select değişimini dinle
-            if (modalForm) {
-                 const selects = modalForm.querySelectorAll('.cinsi_select, .kalinlik_select');
-                 selects.forEach(select => {
-                     select.addEventListener('change', () => filterProductCodes(select));
-                 });
-            }
-        });
-
-        // --- KISMİ TAMAMLAMA MODALI ---
-        function openPartialModal(id, current_m2, urun_kodu) {
-            document.getElementById('partialModal').style.display = 'block';
-            document.getElementById('partial_siparis_id').value = id;
-            document.getElementById('partial_max_m2').innerText = current_m2;
-            document.getElementById('partial_urun_info').innerText = urun_kodu;
-            document.getElementById('partial_input').max = current_m2;
-        }
-
-        function closePartialModal() {
-            document.getElementById('partialModal').style.display = 'none';
-        }
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>🏭 EPS Panel Üretim ve Sipariş Yönetimi</h1>
-        <p style="font-style: italic;">*Tüm giriş ve çıkışlar Metrekare (m²) cinsindendir.</p>
-        <p style="font-weight: bold; color: #007bff;">
-            Mobil Görüntüleme Adresi: <a href="{{ url_for('mobil_gorunum') }}">/mobil</a>
-            <span style="margin-left: 20px;">
-                <a href="{{ url_for('temizle_veritabani') }}" onclick="return confirm('UYARI: Tüm Stok ve Sipariş verileri kalıcı olarak SIFIRLANACAKTIR! Emin misiniz?')" style="color: red; font-weight: bold;">[VERİTABANINI TEMİZLE]</a>
-                <a href="{{ url_for('repair_data_integrity') }}" onclick="return confirm('UYARI: Veri kurtarma işlemi, mevcut tüm Cins/Kalınlık verilerini zorla temizleyip büyük harfe çevirir. Bu, eksik stok hatasını kesin çözmelidir. Emin misiniz?')" style="color: purple; font-weight: bold; margin-left: 15px;">[VERİ KURTARMA (ZORLA TEMİZLE)]</a>
-            </span>
-        </p>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="message {% if category == 'success' %}success{% else %}error{% endif %}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        {% if message %}
-            <div class="message {% if 'Hata' in message or 'Yetersiz' in message %}error{% else %}success{% endif %}">{{ message }}</div>
-        {% endif %}
-        
-        <div class="grid">
-            
-            <div class="form-box" style="grid-column: 1 / span 1;">
-                <h2>2. Yeni Sipariş Girişi (Çoklu Ürün)</h2>
-                <form action="/siparis" method="POST">
-                    <input type="hidden" name="action" value="yeni_siparis">
-                    
-                    <div class="form-section">
-                        <input type="text" name="musteri" required placeholder="Müşteri Adı" style="width: 98%;">
-                        <label style="font-size: 0.9em; margin-top: 5px; display: block;">Sipariş Tarihi: <input type="date" name="siparis_tarihi" value="{{ today }}" required style="width: calc(50% - 8px);"></label>
-                        <label style="font-size: 0.9em; margin-top: 5px; display: block;">Termin Tarihi: <input type="date" name="termin_tarihi" required style="width: calc(50% - 8px);"></label>
-                    </div>
-                    
-                    <div style="font-weight: bold; margin-top: 15px; border-bottom: 1px dashed #007bff; padding-bottom: 5px;">Ürün Kodları ve Metraj (M²)</div>
-                    <div id="siparis-urun-container" style="margin-top: 10px;">
-                        </div>
-                    
-                    <button type="button" onclick="addRow(1)" style="background-color: #28a745; margin-bottom: 15px; width: 100%;">+ Ürün Satırı Ekle</button>
-                    
-                    <button type="submit" style="background-color:#00a359; width: 100%;">Tüm Siparişleri Kaydet</button>
-                </form>
-            </div>
-            
-            <div class="form-box" style="grid-column: 2 / span 1; border-color: #6c757d; background-color: #f8f9fa;">
-                <h2>1. Stok Hareketleri</h2>
-                <div class="form-section">
-                    <div class="kapasite-box">
-                        <h3>⚙️ Günlük Sıva Kapasitesi Ayarı</h3>
-                        <form action="/ayarla/kapasite" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
-                            <input type="number" name="kapasite_m2" min="1" required placeholder="M2" value="{{ gunluk_siva_m2 }}" style="width: 80px;">
-                            <span style="margin-right: 10px;">m² / Gün</span>
-                            <button type="submit" style="background-color:#cc8400;">Kapasiteyi Kaydet</button>
-                        </form>
-                    </div>
-                    
-                    <div class="kapasite-box" style="margin-top: 15px; background-color: #ffe0b2;">
-                        <h3>📏 Yeni Cins/Kalınlık Ekle</h3>
-                        <form action="/ayarla/kalinlik" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
-                            <input type="text" name="yeni_cins" required placeholder="Yeni Cins (Örn: LBX)" style="width: 100px;">
-                            <input type="text" name="yeni_kalinlik" required placeholder="Kalınlık (Örn: 1.5)" style="width: 100px;">
-                            <span style="margin-right: 10px;">CM (Otomatik)</span>
-                            <button type="submit" style="background-color:#e65100;">Ekle</button>
-                        </form>
-                    </div>
-                    
-                    <div class="kapasite-box" style="margin-top: 15px; background-color: #d8f5ff;">
-                        <h3>➕ Yeni Ürün Kodu Ekle</h3>
-                        <form action="/ayarla/urun_kodu" method="POST" style="display:flex; flex-wrap:wrap; align-items:center;">
-                            <input type="text" name="yeni_urun_kodu" required placeholder="Örn: L1709" style="width: 100px;">
-                            <select name="cinsi" required style="width: 150px;">
-                                {% for c in CINSLER %}
-                                    {% for k in KALINLIKLAR %}
-                                        {% set key = c + " " + k %}
-                                        <option value="{{ key }}">{{ key }}</option>
-                                    {% endfor %}
-                                {% endfor %}
-                            </select>
-                            <button type="submit" style="background-color:#17a2b8;">Kodu Ekle</button>
-                        </form>
-                    </div>
-                    <hr style="margin-top: 15px; margin-bottom: 15px;">
-                    <h4>Stok İşlemi Gerçekleştir</h4>
-                    <form action="/islem" method="POST">
-                        <select name="action" required style="width: 100%;">
-                            <option value="ham_alim">1 - Ham Panel Alımı (Stoğa Ekle)</option>
-                            <option value="siva_uygula">2 - Sıva Uygulama (Ham -> Sıvalı Üretim)</option>
-                            <option value="sat_sivali">4 - Sıvalı Panel Satışı</option>
-                            <option value="sat_ham">3 - Ham Panel Satışı</option>
-                            <option value="iptal_ham_alim">5 - Ham Alımı İptal (Ham Stoktan Çıkar)</option>
-                            <option value="iptal_siva">6 - Sıva İşlemi Geri Al (Sıvalı -> Ham)</option>
-                            <option value="iptal_sat_ham">7 - Ham Satışını Geri Al (Ham Stoğa Ekle)</option>
-                            <option value="iptal_sat_sivali">8 - Sıvalı Satışını Geri Al (Sıvalı Stoğa Ekle)</option>
-                        </select>
-                        <select name="cinsi" required style="width: 48%;">
-                            {% for c in CINSLER %}
-                                <option value="{{ c }}">{{ c }}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="kalinlik" required style="width: 48%;">
-                            {% for k in KALINLIKLAR %}
-                                <option value="{{ k }}">{{ k }}</option>
-                            {% endfor %}
-                        </select>
-                        <input type="number" name="m2" min="1" required placeholder="M2" style="width: 100%;">
-                        <button type="submit" style="width: 100%;">İşlemi Kaydet</button>
-                    </form>
-                </div>
-            </div>
-            
-        </div>
-        <hr>
-        <h2 class="plan-header">🚀 Üretim Planlama Özeti (Kapasite: {{ gunluk_siva_m2 }} m²/gün)</h2>
-        {% if toplam_gerekli_siva > 0 %}
-            <p style="font-weight: bold; color: darkred;">Mevcut siparişleri karşılamak için toplam Sıvalı M² eksiği: {{ toplam_gerekli_siva }} m²</p>
-        {% else %}
-            <p style="font-weight: bold; color: green;">Sıvalı malzeme ihtiyacı stoktan karşılanabiliyor. (Toplam bekleyen sipariş {{(siparisler|selectattr('durum', '==', 'Bekliyor')|map(attribute='bekleyen_m2')|sum)}} m²)</p>
-        {% endif %}
-        <div class="grid">
-            <div class="form-box" style="border-color: #28a745; background-color: #e9fff5;">
-                <h3>🧱 Sıva Üretim Planı (Önümüzdeki 5 İş Günü)</h3>
-                <table class="plan-table">
-                    <tr><th>Gün</th><th>Planlanan M²</th></tr>
-                    {% for gun, plan_details in siva_plan_detay.items() %}
-                        {% set total_m2 = plan_details|sum(attribute='m2') %}
-                        <tr>
-                            <td>Gün {{ gun }}</td>
-                            <td>
-                                <b>{{ total_m2 }} m²</b>
-                                <ul style="list-style-type: none; padding-left: 10px; margin: 0;">
-                                    {% for item in plan_details %}
-                                        <li style="font-size: 0.9em; color: #333;">{{ item.cinsi }}: {{ item.m2 }} m²</li>
-                                    {% endfor %}
-                                </ul>
-                            </td>
-                        </tr>
-                    {% else %}
-                        <tr><td colspan="2">Önümüzdeki 5 gün için Sıva ihtiyacı bulunmamaktadır.</td></tr>
-                    {% endfor %}
-                </table>
-            </div>
-            <div class="form-box" style="border-color: #ffc107; background-color: #fff8e6;">
-                <h3>🚚 Sevkiyat Planı (Önümüzdeki 5 Takvim Günü)</h3>
-                {% if sevkiyat_plan_detay %}
-                    {% for tarih, sevkiyatlar in sevkiyat_plan_detay.items() %}
-                        <h4 style="margin-top: 10px; margin-bottom: 5px; color: #ffc107;">{{ tarih }} (Toplam: {{ sevkiyatlar|sum(attribute='bekleyen_m2') }} m²)</h4>
-                        <ul style="list-style-type: none; padding-left: 10px; margin: 0;">
-                            {% for sevkiyat in sevkiyatlar %}
-                                <li style="margin: 0 0 3px 0; font-size: 0.9em;">
-                                    - **{{ sevkiyat.urun_kodu }}** ({{ sevkiyat.bekleyen_m2 }} m²) -> Müşteri: {{ sevkiyat.musteri }}
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endfor %}
-                {% else %}
-                    <p>Önümüzdeki 5 gün terminli sevkiyat bulunmamaktadır.</p>
-                {% endif %}
-            </div>
-        </div>
-        <h2>3. Detaylı Stok Durumu ve Eksik Planlama (M²)</h2>
-        <table class="stok-table">
-            <tr>
-                <th>Cinsi</th>
-                <th>Kalınlık</th>
-                <th>Ham M²</th>
-                <th>Sıvalı M²</th>
-                <th style="background-color: #b0e0e6;">Toplam Bekleyen Sipariş M²</th>
-                <th style="background-color: #ffcccc;">Sıvalı Eksik (Üretilmesi Gereken M²)</th>
-                <th style="background-color: #f08080;">Ham Eksik (Ham Alımı Gereken M²)</th>
-            </tr>
-            {% for stok in stok_list %}
-            <tr>
-                <td>{{ stok.cinsi }}</td>
-                <td>{{ stok.kalinlik }}</td>
-                <td>{{ stok.ham_m2 }}</td>
-                <td>{{ stok.sivali_m2 }}</td>
-                <td>{{ stok.gerekli_siparis_m2 }}</td>
-                <td class="{% if stok.sivali_eksik > 0 %}deficit-sivali{% endif %}">{{ stok.sivali_eksik }}</td>
-                <td class="{% if stok.ham_eksik > 0 %}deficit-ham{% endif %}">{{ stok.ham_eksik }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        
-        <div class="siparis-header-container">
-            <h2 style="margin: 0;">4. Sipariş Listesi</h2>
-            <span class="bekleyen-m2-tag">
-                Toplam Bekleyen Sipariş: {{ toplam_bekleyen_siparis_m2 }} m²
-            </span>
-        </div>
-        
-        <div class="table-responsive">
-        <table class="siparis-table" id="siparis-table"> 
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Kod</th>
-                    <th>Ürün (Cins/K.)</th>
-                    <th>Müşteri</th>
-                    <th>Sipariş Tarihi</th>
-                    <th>Termin Tarihi</th>
-                    <th>Bekleyen M²</th>
-                    <th>Durum</th>
-                    <th>Planlanan İş Günü (Sıva)</th>
-                    <th>İşlem</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for siparis in siparisler %}
-            <tr class="{{ 'siparis-tamamlandi' if siparis.durum == 'Tamamlandi' else ('siparis-iptal' if siparis.durum == 'Iptal' else '') }}">
-                <td>{{ siparis.id }}</td>
-                <td>{{ siparis.siparis_kodu }}</td>
-                <td>{{ siparis.urun_kodu }} ({{ siparis.cinsi }} {{ siparis.kalinlik }})</td>
-                <td>{{ siparis.musteri }}</td>
-                <td>{{ siparis.siparis_tarihi }}</td>
-                <td>{{ siparis.termin_tarihi }}</td>
-                <td>{{ siparis.bekleyen_m2 }}</td>
-                <td>{{ siparis.durum }}</td>
-                <td>
-                    {% if siparis.durum == 'Bekliyor' %}
-                        {% if siparis.planlanan_is_gunu == 0 %}
-                            <span style="color:green; font-weight:bold;">Hemen Stoktan (0)</span>
-                        {% elif siparis.planlanan_is_gunu > 0 %}
-                            <span style="color:darkorange; font-weight:bold;">Gün {{ siparis.planlanan_is_gunu }}</span>
-                        {% else %}
-                            Planlanamaz (Kapasite Yok)
-                        {% endif %}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-                <td>
-                    {% if siparis.durum == 'Bekliyor' %}
-                        <button onclick="openEditModal({{ siparis.id }}, '{{ siparis.cinsi }}', '{{ siparis.kalinlik }}', {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}', '{{ siparis.termin_tarihi }}')" style="background-color: orange; padding: 4px 8px; margin-right: 5px;">Düzenle</button>
-                        
-                        <button type="button" onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')" style="background-color: #17a2b8; padding: 4px 8px; margin-right: 5px;">🔻 Kısmi</button>
-
-                        <form action="/siparis" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="action" value="tamamla_siparis">
-                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                            <button type="submit" style="background-color: green; padding: 4px 8px; margin-right: 5px;">Tamamla</button>
-                        </form>
-                    {% endif %}
-
-                    <!-- SİLME BUTONU: HER DURUMDA GÖRÜNSÜN (Bekleyen veya Tamamlandı) -->
-                     <form action="/siparis" method="POST" style="display:inline-block;" onsubmit="return confirm('Sipariş ID {{ siparis.id }} kalıcı olarak silinecektir. Emin misiniz?');">
-                        <input type="hidden" name="action" value="sil_siparis">
-                        <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                        <button type="submit" style="background-color: darkred; padding: 4px 8px;">Kalıcı Sil</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </div>
-
-    <div id="editModal" class="modal">
-      <div class="modal-content">
-        <span class="close" onclick="closeEditModal()">&times;</span>
-        <h2>Sipariş Düzenleme</h2>
-        <form id="edit-modal-form" action="/siparis" method="POST">
-            <input type="hidden" name="action" value="duzenle_siparis">
-            <input type="hidden" name="siparis_id" value="">
-            <input type="hidden" name="yeni_urun_kodu_hidden" value=""> 
-            
-            <div style="margin-bottom: 10px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Yeni M² Miktarı:</label>
-                <input type="number" name="yeni_m2" min="1" required style="width: 100%;" placeholder="Yeni M²">
-            </div>
-
-            <div style="margin-bottom: 10px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Yeni Termin Tarihi:</label>
-                <input type="date" name="yeni_termin_tarihi" required style="width: 100%;">
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Ürün Seçimi (Cins/K. & Kod):</label>
-                <select class="cinsi_select" required style="width: 49%;" onchange="filterProductCodes(this)">
-                    <option value="">Cins Seçin</option>
-                    {% for c in CINSLER %}
-                        <option value="{{ c }}">{{ c }}</option>
-                    {% endfor %}
-                </select>
-                <select class="kalinlik_select" required style="width: 49%;" onchange="filterProductCodes(this)">
-                    <option value="">Kalınlık Seçin</option>
-                    {% for k in KALINLIKLAR %}
-                        <option value="{{ k }}">{{ k }}</option>
-                    {% endfor %}
-                </select>
-                <select class="urun_kodu_select" name="yeni_urun_kodu" required style="width: 100%; margin-top: 10px;">
-                    <option value="">Ürün Kodu Seçin</option>
-                    </select>
-            </div>
-            
-            <button type="submit" style="background-color:#ff9800; width: 100%;">Değişiklikleri Kaydet</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- KISMİ TAMAMLAMA MODALI -->
-    <div id="partialModal" class="modal">
-      <div class="modal-content" style="max-width: 400px;">
-        <span class="close" onclick="closePartialModal()">&times;</span>
-        <h2 style="color: #17a2b8;">🔻 Kısmi Tamamlama</h2>
-        <p>Ürün: <b id="partial_urun_info"></b></p>
-        <p>Şu an Bekleyen: <b id="partial_max_m2"></b> m²</p>
-        
-        <form action="/siparis" method="POST">
-            <input type="hidden" name="action" value="kismi_tamamla">
-            <input type="hidden" name="siparis_id" id="partial_siparis_id" value="">
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Hazırlanan Miktar (m²):</label>
-                <input type="number" name="hazirlanan_m2" id="partial_input" min="1" required style="width: 100%; border: 2px solid #17a2b8;" placeholder="Örn: 50">
-                <small style="color: #666;">* Eğer girilen miktar bekleyen miktara eşit veya büyükse, sipariş <b>TAMAMLANDI</b> olarak işaretlenecektir.</small>
-            </div>
-
-            <button type="submit" style="background-color:#17a2b8; width: 100%;">Kaydet ve Düş</button>
-        </form>
-      </div>
-    </div>
-</body>
-</html>
-'''
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=PORT)

@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPS Yönetim Paneli v3.1</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#64748b',
+                        success: '#22c55e',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* DataTables Customization */
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_processing,
+        .dataTables_wrapper .dataTables_paginate {
+            color: #475569;
+            margin-bottom: 10px;
+        }
+
+        table.dataTable thead th {
+            padding: 12px 10px;
+            background-color: #f8fafc;
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        table.dataTable tbody td {
+            padding: 10px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .modal {
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-content {
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+
+        .modal.show .modal-content {
+            transform: scale(1);
+        }
+    </style>
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+
+    <!-- Mobile Header -->
+    <div class="lg:hidden bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-20">
+        <h1 class="text-xl font-bold text-primary flex items-center gap-2">
+            <i class="fa-solid fa-industry"></i> EPS Panel
+        </h1>
+        <button onclick="toggleSidebar()" class="text-slate-600 hover:text-primary">
+            <i class="fa-solid fa-bars text-2xl"></i>
+        </button>
+    </div>
+
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- Sidebar -->
+        <aside id="sidebar"
+            class="fixed inset-y-0 left-0 bg-slate-900 text-white w-64 transform -translate-x-full lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out z-30 flex flex-col shadow-xl">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center">
+                <h1 class="text-2xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-cubes text-blue-400"></i> EPS v3.1
+                </h1>
+                <button onclick="toggleSidebar()" class="lg:hidden text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto p-4 space-y-2">
+                <a href="#"
+                    class="block px-4 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+                    <i class="fa-solid fa-chart-line w-6"></i> Dashboard
+                </a>
+                <a href="{{ url_for('mobil_gorunum') }}"
+                    class="block px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition" target="_blank">
+                    <i class="fa-solid fa-mobile-screen w-6"></i> Mobil Görünüm
+                </a>
+
+                <div class="mt-8 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Sistem Araçları
+                </div>
+                <!-- Capacity Settings inline wrapper -->
+                <div class="bg-slate-800/50 rounded-lg p-3 mt-2 border border-slate-700">
+                    <form action="/ayarla/kapasite" method="POST" class="space-y-2">
+                        <label class="text-xs text-slate-400">Günlük Sıva Kapasitesi (m²)</label>
+                        <div class="flex gap-2">
+                            <input type="number" name="kapasite_m2" value="{{ gunluk_siva_m2 }}"
+                                class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500">
+                            <button type="submit"
+                                class="bg-blue-600 hover:bg-blue-500 px-3 rounded text-white text-xs">Kaydet</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="mt-auto pt-6 border-t border-slate-800">
+                    <a href="{{ url_for('temizle_veritabani') }}"
+                        onclick="return confirm('DİKKAT: Tüm veriler silinecek! Onaylıyor musunuz?')"
+                        class="flex items-center gap-2 px-4 py-2 text-red-400 hover:bg-red-400/10 rounded-lg transition text-sm">
+                        <i class="fa-solid fa-trash-can"></i> Veritabanını Sıfırla
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto h-full p-4 lg:p-8 relative">
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-full max-w-sm">
+                {% for category, message in messages %}
+                <div
+                    class="p-4 rounded-lg shadow-lg border-l-4 flex items-center justify-between {{ 'bg-green-100 border-green-500 text-green-800' if category == 'success' else 'bg-red-100 border-red-500 text-red-800' if 'Hata' in message or category == 'error' else 'bg-blue-100 border-blue-500 text-blue-800' }}">
+                    <div class="flex items-center gap-2">
+                        <i
+                            class="fa-solid {{ 'fa-circle-check' if category == 'success' else 'fa-circle-exclamation' }}"></i>
+                        <span class="font-medium text-sm">{{ message }}</span>
+                    </div>
+                    <button onclick="this.parentElement.remove()"
+                        class="text-lg opacity-50 hover:opacity-100">&times;</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            {% if message %}
+            <!-- Query param message fallback -->
+            <div
+                class="mb-6 p-4 rounded-lg shadow-sm border-l-4 {{ 'bg-red-50 border-red-500 text-red-700' if 'Hata' in message or 'Yetersiz' in message else 'bg-green-50 border-green-500 text-green-700' }}">
+                <p class="font-medium">{{ message }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Top Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500 uppercase">Bekleyen Sipariş</p>
+                            <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ toplam_bekleyen_siparis_m2 }} m²</h3>
+                        </div>
+                        <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                            <i class="fa-solid fa-clipboard-list text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500 uppercase">Sıvalı Üretim İhtiyacı</p>
+                            <h3
+                                class="text-2xl font-bold {{ 'text-red-600' if toplam_gerekli_siva > 0 else 'text-green-600' }} mt-1">
+                                {{ toplam_gerekli_siva }} m²
+                            </h3>
+                        </div>
+                        <div class="p-2 bg-orange-50 text-orange-600 rounded-lg">
+                            <i class="fa-solid fa-trowel-bricks text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add more stats here if calculated in backend -->
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+                <!-- LEFT COLUMN: Forms -->
+                <div class="xl:col-span-1 space-y-8">
+
+                    <!-- New Order Form -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
+                            <h2 class="text-white font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-plus-circle"></i> Yeni Sipariş Girişi
+                            </h2>
+                        </div>
+                        <div class="p-6">
+                            <form action="/siparis" method="POST" id="newOrderForm">
+                                <input type="hidden" name="action" value="yeni_siparis">
+
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Müşteri Adı</label>
+                                        <input type="text" name="musteri" required
+                                            class="w-full rounded-lg border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
+                                            placeholder="Firma veya Kişi Adı">
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Sipariş
+                                                Tarihi</label>
+                                            <input type="date" name="siparis_tarihi" value="{{ today }}" required
+                                                class="w-full rounded-lg border-slate-300 shadow-sm text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Termin
+                                                Tarihi</label>
+                                            <input type="date" name="termin_tarihi" required
+                                                class="w-full rounded-lg border-slate-300 shadow-sm text-sm">
+                                        </div>
+                                    </div>
+
+                                    <div class="border-t border-slate-100 pt-4">
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Ürünler</label>
+                                        <div id="siparis-urun-container" class="space-y-3">
+                                            <!-- Rows inserted by JS -->
+                                        </div>
+                                        <button type="button" onclick="addRow(1)"
+                                            class="mt-3 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-blue-500 hover:text-blue-500 transition text-sm font-medium">
+                                            <i class="fa-solid fa-plus"></i> Satır Ekle
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button type="submit"
+                                    class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg hover:shadow-xl transition transform active:scale-95">
+                                    Siparişi Kaydet
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Stock Operations -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-slate-100 px-6 py-4 border-b border-slate-200">
+                            <h2 class="text-slate-700 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i> Stok Hareketleri
+                            </h2>
+                        </div>
+                        <div class="p-6 space-y-6">
+
+                            <!-- Quick Add Actions -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-orange-50 p-4 rounded-lg border border-orange-100">
+                                    <h4 class="text-xs font-bold text-orange-800 uppercase mb-2">Tanım Ekle</h4>
+                                    <form action="/ayarla/kalinlik" method="POST" class="space-y-2">
+                                        <input type="text" name="yeni_cins" placeholder="Cins (LBX)"
+                                            class="w-full text-xs px-2 py-1 rounded border-orange-200" required>
+                                        <input type="text" name="yeni_kalinlik" placeholder="Kalınlık (1.5)"
+                                            class="w-full text-xs px-2 py-1 rounded border-orange-200" required>
+                                        <button
+                                            class="w-full bg-orange-500 text-white text-xs py-1 rounded hover:bg-orange-600">Ekle</button>
+                                    </form>
+                                </div>
+                                <div class="bg-cyan-50 p-4 rounded-lg border border-cyan-100">
+                                    <h4 class="text-xs font-bold text-cyan-800 uppercase mb-2">Kod Ekle</h4>
+                                    <form action="/ayarla/urun_kodu" method="POST" class="space-y-2">
+                                        <input type="text" name="yeni_urun_kodu" placeholder="Kod (L101)"
+                                            class="w-full text-xs px-2 py-1 rounded border-cyan-200" required>
+                                        <select name="cinsi" class="w-full text-xs px-2 py-1 rounded border-cyan-200"
+                                            required>
+                                            {% for c in CINSLER %}
+                                            {% for k in KALINLIKLAR %}
+                                            <option value="{{ c }} {{ k }}">{{ c }} {{ k }}</option>
+                                            {% endfor %}
+                                            {% endfor %}
+                                        </select>
+                                        <button
+                                            class="w-full bg-cyan-600 text-white text-xs py-1 rounded hover:bg-cyan-700">Ekle</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <hr class="border-slate-100">
+
+                            <!-- Stock Action Form -->
+                            <form action="/islem" method="POST" class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1">İşlem Tipi</label>
+                                    <select name="action" class="w-full rounded-lg border-slate-300 text-sm py-2">
+                                        <option value="ham_alim">📥 Ham Alımı (Giriş)</option>
+                                        <option value="siva_uygula">🔨 Sıva Uygula (Ham -> Sıvalı)</option>
+                                        <option value="sat_sivali">📦 Sıvalı Satış (Çıkış)</option>
+                                        <option value="sat_ham">📦 Ham Satış (Çıkış)</option>
+                                        <option disabled>──────────</option>
+                                        <option value="iptal_ham_alim">↩️ Alım İptal</option>
+                                        <option value="iptal_siva">↩️ Sıva İptal</option>
+                                        <option value="iptal_sat_sivali">↩️ Sıvalı Satış İptal</option>
+                                    </select>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <select name="cinsi" class="w-full rounded-lg border-slate-300 text-sm">
+                                        {% for c in CINSLER %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                                    </select>
+                                    <select name="kalinlik" class="w-full rounded-lg border-slate-300 text-sm">
+                                        {% for k in KALINLIKLAR %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+                                    </select>
+                                </div>
+
+                                <input type="number" name="m2" min="1" required placeholder="Miktar (m²)"
+                                    class="w-full rounded-lg border-slate-300 text-sm py-2">
+
+                                <button type="submit"
+                                    class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-lg transition">
+                                    İşlemi Uygula
+                                </button>
+                            </form>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: Tables -->
+                <div class="xl:col-span-2 space-y-8">
+
+                    <!-- Planning Summary -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Plaster Plan -->
+                        <div class="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
+                            <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-week"></i> 5 Günlük Üretim Planı
+                            </h3>
+                            {% if siva_plan_detay %}
+                            <div class="space-y-3">
+                                {% for gun, details in siva_plan_detay.items() %}
+                                <div class="bg-white p-3 rounded-lg shadow-sm">
+                                    <div class="flex justify-between items-center mb-2 border-b border-emerald-50 pb-1">
+                                        <span class="font-bold text-emerald-700">Gün {{ gun }}</span>
+                                        <span
+                                            class="text-sm bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">{{
+                                            details|sum(attribute='m2') }} m²</span>
+                                    </div>
+                                    <ul class="text-sm text-slate-600 space-y-1">
+                                        {% for item in details %}
+                                        <li>• {{ item.cinsi }}: <b>{{ item.m2 }}</b> m²</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-sm text-emerald-600 italic">Planlanan üretim yok.</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Shipment Plan -->
+                        <div class="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                            <h3 class="font-bold text-amber-800 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-truck-fast"></i> Sevkiyat Planı
+                            </h3>
+                            {% if sevkiyat_plan_detay %}
+                            <div class="space-y-3">
+                                {% for tarih, sevkiyatlar in sevkiyat_plan_detay.items() %}
+                                <div class="bg-white p-3 rounded-lg shadow-sm">
+                                    <div class="flex justify-between items-center mb-2 border-b border-amber-50 pb-1">
+                                        <span class="font-bold text-amber-700 text-sm">{{ tarih }}</span>
+                                        <span
+                                            class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">{{
+                                            sevkiyatlar|sum(attribute='bekleyen_m2') }} m²</span>
+                                    </div>
+                                    <ul class="text-xs text-slate-600 space-y-1">
+                                        {% for s in sevkiyatlar %}
+                                        <li>➔ <b>{{ s.urun_kodu }}</b> | {{ s.musteri }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-sm text-amber-600 italic">Yakın sevkiyat yok.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Orders Table -->
+                    <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+                        <div
+                            class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h2 class="text-xl font-bold text-slate-800">Sipariş Listesi</h2>
+                            <span class="bg-slate-100 text-slate-600 px-4 py-1 rounded-full text-sm font-semibold">
+                                Toplam Bekleyen: {{ toplam_bekleyen_siparis_m2 }} m²
+                            </span>
+                        </div>
+                        <div class="p-6 overflow-x-auto">
+                            <table id="ordersTable" class="w-full text-left border-collapse hidden md:table">
+                                <!-- Hidden on mobile, shown on md -->
+                                <thead>
+                                    <tr>
+                                        <!-- ID Column Hidden mobile -->
+                                        <th class="hidden lg:table-cell">ID</th>
+                                        <th>Kod</th>
+                                        <th>Müşteri</th>
+                                        <th class="hidden lg:table-cell">Detay</th>
+                                        <th>Tarihler</th>
+                                        <th>M²</th>
+                                        <th>Durum</th>
+                                        <th>İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for siparis in siparisler %}
+                                    <tr
+                                        class="hover:bg-slate-50 transition {{ 'bg-green-50/50' if siparis.durum == 'Tamamlandi' }}">
+                                        <td class="hidden lg:table-cell text-xs text-slate-400 font-mono">#{{ siparis.id
+                                            }}</td>
+                                        <td class="font-mono font-semibold">{{ siparis.urun_kodu }}</td>
+                                        <td class="text-sm font-medium">{{ siparis.musteri }}</td>
+                                        <td class="hidden lg:table-cell text-xs text-slate-500">{{ siparis.cinsi }} {{
+                                            siparis.kalinlik }}</td>
+                                        <td class="text-xs text-slate-500">
+                                            <div class="flex flex-col">
+                                                <span>Sip: {{ siparis.siparis_tarihi }}</span>
+                                                <span class="font-bold text-slate-700">Ter: {{ siparis.termin_tarihi
+                                                    }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="font-bold text-slate-700">{{ siparis.bekleyen_m2 }}</td>
+                                        <td>
+                                            {% if siparis.durum == 'Bekliyor' %}
+                                            <span
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                Bekliyor
+                                            </span>
+                                            {% if siparis.planlanan_is_gunu > 0 %}
+                                            <div class="text-xs text-orange-600 font-bold mt-1">Plan: Gün {{
+                                                siparis.planlanan_is_gunu }}</div>
+                                            {% endif %}
+                                            {% else %}
+                                            <span
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Tamamlandı
+                                            </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="flex gap-2">
+                                                {% if siparis.durum == 'Bekliyor' %}
+                                                <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
+                                                    data-kalinlik="{{ siparis.kalinlik }}"
+                                                    data-m2="{{ siparis.bekleyen_m2 }}"
+                                                    data-kod="{{ siparis.urun_kodu }}"
+                                                    data-termin="{{ siparis.termin_tarihi }}"
+                                                    data-musteri="{{ siparis.musteri }}"
+                                                    onclick="openEditModalFromData(this)"
+                                                    class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+                                                    title="Düzenle">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </button>
+                                                <button
+                                                    onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')"
+                                                    class="p-2 bg-cyan-100 text-cyan-600 rounded hover:bg-cyan-200 transition"
+                                                    title="Kısmi">
+                                                    <i class="fa-solid fa-scissors"></i>
+                                                </button>
+                                                <form action="/siparis" method="POST" class="inline">
+                                                    <input type="hidden" name="action" value="tamamla_siparis">
+                                                    <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                                    <button type="submit"
+                                                        class="p-2 bg-green-100 text-green-600 rounded hover:bg-green-200 transition"
+                                                        title="Tamamla">
+                                                        <i class="fa-solid fa-check"></i>
+                                                    </button>
+                                                </form>
+                                                {% elif siparis.durum == 'Tamamlandi' %}
+                                                <!-- UNDO BUTTON -->
+                                                <button
+                                                    onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
+                                                    class="p-2 bg-orange-100 text-orange-600 rounded hover:bg-orange-200 transition"
+                                                    title="Geri Al">
+                                                    <i class="fa-solid fa-rotate-left"></i>
+                                                </button>
+                                                {% endif %}
+
+                                                <form action="/siparis" method="POST" class="inline"
+                                                    onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
+                                                    <input type="hidden" name="action" value="sil_siparis">
+                                                    <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                                    <button type="submit"
+                                                        class="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+                                                        title="Sil">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+
+                            <!-- MOBILE CARDS VIEW (Visible only on small screens) -->
+                            <div class="md:hidden space-y-4">
+                                {% for siparis in siparisler %}
+                                <div
+                                    class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 relative {{ 'bg-green-50/30' if siparis.durum == 'Tamamlandi' }}">
+                                    <!-- Status Badge Top Right -->
+                                    <div class="absolute top-4 right-4">
+                                        {% if siparis.durum == 'Bekliyor' %}
+                                        <span
+                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-yellow-100 text-yellow-800">
+                                            Bekliyor
+                                        </span>
+                                        {% else %}
+                                        <span
+                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800">
+                                            Tamamlandı
+                                        </span>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Main Info -->
+                                    <div class="pr-20"> <!-- Padding for badge -->
+                                        <h4 class="text-lg font-bold text-slate-900">{{ siparis.musteri }}</h4>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span
+                                                class="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 font-semibold">{{
+                                                siparis.urun_kodu }}</span>
+                                            <span class="text-xs text-slate-500">{{ siparis.cinsi }} {{ siparis.kalinlik
+                                                }}</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dates & Amount Grid -->
+                                    <div class="grid grid-cols-2 gap-4 mt-4 py-3 border-t border-b border-slate-50">
+                                        <div>
+                                            <p class="text-[10px] text-slate-400 uppercase font-semibold">Termin</p>
+                                            <p class="text-sm font-medium text-slate-700">{{ siparis.termin_tarihi }}
+                                            </p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-[10px] text-slate-400 uppercase font-semibold">Bekleyen</p>
+                                            <p
+                                                class="text-xl font-bold {{ 'text-red-500' if siparis.bekleyen_m2 > 1000 else 'text-blue-600' }}">
+                                                {{ siparis.bekleyen_m2 }} m²</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="flex items-center justify-between mt-4 gap-2">
+                                        {% if siparis.durum == 'Bekliyor' %}
+                                        <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
+                                            data-kalinlik="{{ siparis.kalinlik }}" data-m2="{{ siparis.bekleyen_m2 }}"
+                                            data-kod="{{ siparis.urun_kodu }}" data-termin="{{ siparis.termin_tarihi }}"
+                                            data-musteri="{{ siparis.musteri }}" onclick="openEditModalFromData(this)"
+                                            class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition">
+                                            <i class="fa-solid fa-pen mr-1"></i> Düzenle
+                                        </button>
+                                        <button
+                                            onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')"
+                                            class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition">
+                                            <i class="fa-solid fa-scissors mr-1"></i> Kısmi
+                                        </button>
+                                        <form action="/siparis" method="POST" class="inline">
+                                            <input type="hidden" name="action" value="tamamla_siparis">
+                                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                            <button type="submit"
+                                                class="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 shadow-lg shadow-green-500/30 transition"
+                                                title="Tamamla">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                        </form>
+                                        {% elif siparis.durum == 'Tamamlandi' %}
+                                        <button onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
+                                            class="flex-1 bg-orange-100 text-orange-600 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 transition">
+                                            <i class="fa-solid fa-rotate-left mr-1"></i> Geri Al
+                                        </button>
+                                        {% endif %}
+
+                                        <!-- Delete is always available but small -->
+                                        <form action="/siparis" method="POST" class="inline"
+                                            onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
+                                            <input type="hidden" name="action" value="sil_siparis">
+                                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                            <button type="submit" class="text-red-400 hover:text-red-600 p-2 ml-1"
+                                                title="Sil">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stock Overview Table -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-100">
+                            <h3 class="font-bold text-slate-700">Detaylı Stok Görünümü</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                    <tr>
+                                        <th class="px-4 py-3">Ürün</th>
+                                        <th class="px-4 py-3 text-right">Ham Stok</th>
+                                        <th class="px-4 py-3 text-right">Sıvalı Stok</th>
+                                        <th class="px-4 py-3 text-right bg-blue-50">Bekleyen</th>
+                                        <th class="px-4 py-3 text-right text-red-600 bg-red-50">Eksik (Sıvalı)</th>
+                                        <th class="px-4 py-3 text-right text-orange-600 bg-orange-50">Eksik (Ham)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    {% for s in stok_list %}
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-4 py-2 font-medium">{{ s.cinsi }} {{ s.kalinlik }}</td>
+                                        <td class="px-4 py-2 text-right text-slate-600">{{ s.ham_m2 }}</td>
+                                        <td class="px-4 py-2 text-right text-slate-600">{{ s.sivali_m2 }}</td>
+                                        <td class="px-4 py-2 text-right font-bold bg-blue-50/30">{{ s.gerekli_siparis_m2
+                                            }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-red-600 bg-red-50/30">{{
+                                            s.sivali_eksik }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-orange-600 bg-orange-50/30">{{
+                                            s.ham_eksik }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog"
+        aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-filter backdrop-blur-sm"
+                onclick="closeModal('editModal')"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div
+                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="modal-title">Sipariş Düzenle</h3>
+                    <form id="editForm" action="/siparis" method="POST" class="space-y-4">
+                        <input type="hidden" name="action" value="duzenle_siparis">
+                        <input type="hidden" name="siparis_id" id="edit_siparis_id">
+                        <input type="hidden" name="yeni_urun_kodu_hidden" id="edit_urun_kodu_hidden">
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Müşteri Adı</label>
+                            <input type="text" name="yeni_musteri" id="edit_musteri" required
+                                class="mt-1 w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Yeni M²</label>
+                                <input type="number" name="yeni_m2" id="edit_m2" required
+                                    class="mt-1 w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Termin Tarihi</label>
+                                <input type="date" name="yeni_termin_tarihi" id="edit_termin" required
+                                    class="mt-1 w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Ürün Bilgileri</label>
+                            <div class="flex gap-2">
+                                <select class="cinsi_select w-1/2 border border-gray-300 rounded-md py-2 px-3 text-sm"
+                                    required onchange="filterProductCodes(this)">
+                                    <option value="">Cins</option>
+                                    {% for c in CINSLER %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                                </select>
+                                <select
+                                    class="kalinlik_select w-1/2 border border-gray-300 rounded-md py-2 px-3 text-sm"
+                                    required onchange="filterProductCodes(this)">
+                                    <option value="">Kalınlık</option>
+                                    {% for k in KALINLIKLAR %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <select name="yeni_urun_kodu"
+                                class="urun_kodu_select w-full border border-gray-300 rounded-md py-2 px-3 text-sm"
+                                required>
+                                <option value="">Kod Seçin...</option>
+                            </select>
+                        </div>
+
+                        <div class="mt-5 sm:mt-6">
+                            <button type="submit"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">
+                                Değişiklikleri Kaydet
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partial Modal -->
+    <div id="partialModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-filter backdrop-blur-sm"
+                onclick="closeModal('partialModal')"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div
+                class="inline-block align-bottom bg-white rounded-xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full sm:p-6">
+                <div>
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                        <i class="fa-solid fa-scissors text-blue-600"></i>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-5">
+                        <h3 class="text-lg leading-6 font-bold text-gray-900">Kısmi Tamamlama</h3>
+                        <div class="mt-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <p class="text-sm text-gray-600">
+                                Ürün: <span id="partial_urun_info" class="font-bold text-gray-900"></span><br>
+                                Bekleyen: <span id="partial_max_m2" class="font-bold text-blue-600 text-lg"></span> m²
+                            </p>
+                        </div>
+
+                        <!-- History Section -->
+                        <div id="partial_history_container" class="mt-4 text-left hidden">
+                            <h4 class="text-xs font-bold text-gray-500 uppercase border-b border-gray-200 pb-1 mb-2">
+                                Geçmiş İşlemler</h4>
+                            <ul id="partial_history_list" class="text-xs space-y-2 max-h-32 overflow-y-auto pr-1">
+                                <!-- History items will be injected here -->
+                            </ul>
+                        </div>
+
+                        <form action="/siparis" method="POST" class="mt-4">
+                            <input type="hidden" name="action" value="kismi_tamamla">
+                            <input type="hidden" name="siparis_id" id="partial_siparis_id">
+
+                            <label class="block text-left text-xs font-semibold text-gray-600 mb-1">Hazırlanan Miktar
+                                (m²)</label>
+                            <input type="number" name="hazirlanan_m2" id="partial_input" placeholder="Örn: 50"
+                                class="appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm shadow-sm"
+                                required>
+
+                            <button type="submit"
+                                class="mt-4 w-full inline-flex justify-center rounded-lg border border-transparent shadow-lg shadow-blue-500/30 px-4 py-3 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm transition-all hover:scale-[1.02]">
+                                Kaydet ve Düş
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Undo Modal -->
+    <div id="undoModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-filter backdrop-blur-sm"
+                onclick="closeModal('undoModal')"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div
+                class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-sm w-full sm:p-6">
+                <div>
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100">
+                        <i class="fa-solid fa-rotate-left text-orange-600"></i>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-5">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Siparişi Geri Al</h3>
+                        <p class="text-sm text-gray-500 mt-2">Bu tamamlanmış bir siparişi tekrar "Bekliyor" durumuna
+                            getirecek.</p>
+
+                        <form action="/siparis" method="POST" class="mt-4">
+                            <input type="hidden" name="action" value="geri_al_tamamla">
+                            <input type="hidden" name="siparis_id" id="undo_siparis_id">
+
+                            <label class="block text-left text-xs font-semibold text-gray-600 mb-1">Geri Alınacak Miktar
+                                (m²)</label>
+                            <input type="number" name="geri_alinacak_m2" min="1" placeholder="Miktar Girin"
+                                class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
+                                required>
+
+                            <button type="submit"
+                                class="mt-4 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 sm:text-sm">
+                                Siparişi Kurtar
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+    <script>
+        const CINS_TO_BOYALI_MAP = {{ CINS_TO_BOYALI_MAP | tojson }};
+        const CINSLER = {{ CINSLER | tojson }};
+        const KALINLIKLAR = {{ KALINLIKLAR | tojson }};
+
+        const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
+        const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+            }
+        }
+
+        function filterProductCodes(selectElement) {
+            const container = selectElement.closest('.siparis-satir') || document.getElementById('editForm') || selectElement.parentElement.parentElement;
+            const cinsiSelect = container.querySelector('.cinsi_select');
+            const kalinlikSelect = container.querySelector('.kalinlik_select');
+            const urunKoduSelect = container.querySelector('.urun_kodu_select');
+
+            const cinsi = cinsiSelect.value;
+            const kalinlik = kalinlikSelect.value;
+            const currentCode = urunKoduSelect.getAttribute('data-value') || urunKoduSelect.value;
+
+            urunKoduSelect.innerHTML = '<option value="">Seçiniz...</option>';
+
+            if (cinsi && kalinlik) {
+                const key = cinsi + ' ' + kalinlik;
+                const codes = CINS_TO_BOYALI_MAP[key] || [];
+
+                codes.forEach(code => {
+                    const option = document.createElement('option');
+                    option.value = code;
+                    option.textContent = code;
+                    urunKoduSelect.appendChild(option);
+                });
+
+                if (currentCode && codes.includes(currentCode)) {
+                    urunKoduSelect.value = currentCode;
+                }
+            }
+        }
+
+        // Add Row Logic
+        let rowIndex = 0;
+        function addRow(count = 1) {
+            const container = document.getElementById('siparis-urun-container');
+            for (let i = 0; i < count; i++) {
+                rowIndex++;
+                const html = `
+                    <div class="siparis-satir flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200" id="row-${rowIndex}">
+                        <select name="urun_kodu_${rowIndex}" class="urun_kodu_select hidden"></select> <!-- Compatibility placeholder -->
+                        
+                        <div class="flex-1 grid grid-cols-2 gap-2">
+                             <select class="cinsi_select w-full text-xs rounded border-slate-300" name="cinsi_${rowIndex}" required onchange="filterProductCodes(this)">
+                                <option value="">Cins</option>
+                                ${CINS_OPTIONS}
+                             </select>
+                             <select class="kalinlik_select w-full text-xs rounded border-slate-300" name="kalinlik_${rowIndex}" required onchange="filterProductCodes(this)">
+                                <option value="">Kalınlık</option>
+                                ${KALINLIK_OPTIONS}
+                             </select>
+                        </div>
+                        <div class="w-1/4">
+                             <select class="urun_kodu_select w-full text-xs rounded border-slate-300" name="urun_kodu_${rowIndex}" required>
+                                 <option value="">Kod</option>
+                             </select>
+                        </div>
+                        <div class="w-1/5">
+                             <input type="number" name="m2_${rowIndex}" placeholder="M²" required class="w-full text-xs rounded border-slate-300">
+                        </div>
+                        <button type="button" onclick="document.getElementById('row-${rowIndex}').remove()" class="text-red-500 hover:text-red-700 px-2">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            }
+        }
+
+        // Modal Functions
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin, musteri) {
+            const modal = document.getElementById('editModal');
+            modal.classList.remove('hidden');
+
+            document.getElementById('edit_siparis_id').value = id;
+            document.getElementById('edit_m2').value = m2;
+            document.getElementById('edit_termin').value = termin;
+            document.getElementById('edit_musteri').value = musteri;
+            document.getElementById('edit_urun_kodu_hidden').value = urun_kodu;
+
+            const form = document.getElementById('editForm');
+            const cinsiSelect = form.querySelector('.cinsi_select');
+            const kalinlikSelect = form.querySelector('.kalinlik_select');
+            const urunSelect = form.querySelector('.urun_kodu_select');
+
+            cinsiSelect.value = cinsi.toUpperCase();
+            kalinlikSelect.value = kalinlik.toUpperCase();
+
+            // Set value efficiently to trigger filter
+            urunSelect.setAttribute('data-value', urun_kodu);
+            filterProductCodes(cinsiSelect);
+            urunSelect.value = urun_kodu;
+        }
+
+        function openEditModalFromData(button) {
+            const id = button.getAttribute('data-id');
+            const cinsi = button.getAttribute('data-cinsi');
+            const kalinlik = button.getAttribute('data-kalinlik');
+            const m2 = button.getAttribute('data-m2');
+            const urun_kodu = button.getAttribute('data-kod');
+            const termin = button.getAttribute('data-termin');
+            const musteri = button.getAttribute('data-musteri');
+
+            openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin, musteri);
+        }
+
+        async function openPartialModal(id, currentM2, code) {
+            document.getElementById('partialModal').classList.remove('hidden');
+            document.getElementById('partial_siparis_id').value = id;
+            document.getElementById('partial_max_m2').innerText = currentM2;
+            document.getElementById('partial_urun_info').innerText = code;
+            document.getElementById('partial_input').max = currentM2;
+            document.getElementById('partial_input').value = ''; // Reset input
+
+            // Fetch History
+            const historyContainer = document.getElementById('partial_history_container');
+            const historyList = document.getElementById('partial_history_list');
+            try {
+                const response = await fetch(`/api/siparis_gecmisi/${id}`);
+                const history = await response.json();
+
+                historyList.innerHTML = '';
+                if (history && history.length > 0) {
+                    historyContainer.classList.remove('hidden');
+                    history.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100';
+                        li.innerHTML = `
+                            <span>
+                                <span class="font-bold text-gray-700">${item.miktar} m²</span> 
+                                <span class="text-gray-400 text-[10px] ml-1">${item.tarih}</span>
+                            </span>
+                            <form action="/siparis" method="POST" class="inline" onsubmit="return confirm('Bu işlemi geri almak istiyor musunuz? Bekleyen miktara eklenecektir.')">
+                                <input type="hidden" name="action" value="geri_al_kismi">
+                                <input type="hidden" name="gecmis_id" value="${item.id}">
+                                <button type="submit" class="text-xs text-orange-500 hover:text-orange-700 font-medium px-2 py-1 rounded hover:bg-orange-50 transition">
+                                    <i class="fa-solid fa-rotate-left"></i> Geri Al
+                                </button>
+                            </form>
+                        `;
+                        historyList.appendChild(li);
+                    });
+                } else {
+                    historyContainer.classList.add('hidden');
+                }
+            } catch (e) {
+                console.error("Geçmiş yüklenemedi", e);
+                historyContainer.classList.add('hidden');
+            }
+        }
+
+        function openUndoModal(id, code) {
+            document.getElementById('undoModal').classList.remove('hidden');
+            document.getElementById('undo_siparis_id').value = id;
+        }
+
+        // Init DataTables and Defaults
+        $(document).ready(function () {
+            $('#ordersTable').DataTable({
+                responsive: true,
+                language: { url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/tr.json" },
+                pageLength: 25,
+                order: [[4, "asc"]] // Sort by dates
+            });
+
+            // Add initial row
+            addRow(1);
+        });
+    </script>
+</body>
+
+</html>
