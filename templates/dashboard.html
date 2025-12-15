@@ -1041,7 +1041,7 @@
                 rowIndex++;
                 const html = `
                     <div class="siparis-satir flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200" id="row-${rowIndex}">
-                        <select name="urun_kodu_${rowIndex}" class="hidden"></select> <!-- Backend Compat -->
+                        <select name="urun_kodu_compat_${rowIndex}" class="hidden"></select> <!-- Backend Compat (Renamed to avoid conflict) -->
                         
                         <div class="flex-1 grid grid-cols-2 gap-2">
                              <select class="cinsi_select w-full text-xs rounded border-slate-300" name="cinsi_${rowIndex}" required onchange="filterProductCodes(this)">
@@ -1058,7 +1058,7 @@
                                     name="urun_kodu_${rowIndex}" 
                                     class="urun_kodu_input w-full text-xs rounded border-slate-300 uppercase font-mono" 
                                     required 
-                                    placeholder="Kod" 
+                                    placeholder="Kod (Yaz/Seç)" 
                                     list="list_urun_kodu_${rowIndex}"
                                     oninput="handleCodeInput(this)"
                                     autocomplete="off">
