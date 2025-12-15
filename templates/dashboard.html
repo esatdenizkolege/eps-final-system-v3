@@ -113,16 +113,50 @@
             </div>
 
             <nav class="flex-1 overflow-y-auto p-4 space-y-2">
-                <a href="#"
-                    class="block px-4 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
-                    <i class="fa-solid fa-chart-line w-6"></i> Dashboard
+                <!-- 1. Yeni Sipariş Girişi -->
+                <a href="#" onclick="showSection('section-new-order', this)"
+                    class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
+                    <i class="fa-solid fa-plus-circle w-6"></i> Yeni Sipariş Girişi
                 </a>
+
+                <!-- 2. Bekleyen Siparişler (Default Active) -->
+                <a href="#" onclick="showSection('section-pending-orders', this)"
+                    class="nav-item block px-4 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+                    <i class="fa-solid fa-clipboard-list w-6"></i> Bekleyen Siparişler
+                </a>
+
+                <!-- 3. Üretim Hareketleri (Ham/Zemin) -->
+                <a href="#" onclick="showSection('section-production', this)"
+                    class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
+                    <i class="fa-solid fa-dolly w-6"></i> Üretim Hareketleri
+                </a>
+
+                <!-- 4. Stok Tanımlamaları -->
+                <a href="#" onclick="showSection('section-stock-defs', this)"
+                    class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
+                    <i class="fa-solid fa-tags w-6"></i> Stok Tanımlamaları
+                </a>
+
+                <!-- 5. Günlük Üretim ve Sevkiyat Planı -->
+                <a href="#" onclick="showSection('section-daily-plan', this)"
+                    class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
+                    <i class="fa-solid fa-calendar-days w-6"></i> Günlük Plan
+                </a>
+
+                <!-- 6. Sipariş Analizi -->
+                <a href="#" onclick="showSection('section-analysis', this)"
+                    class="nav-item block px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition">
+                    <i class="fa-solid fa-chart-pie w-6"></i> Sipariş Analizi
+                </a>
+
+                <div class="my-4 border-t border-slate-700"></div>
+
                 <a href="{{ url_for('mobil_gorunum') }}"
                     class="block px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition" target="_blank">
                     <i class="fa-solid fa-mobile-screen w-6"></i> Mobil Görünüm
                 </a>
 
-                <div class="mt-8 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <div class="mt-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Sistem Araçları
                 </div>
                 <!-- Capacity Settings inline wrapper -->
@@ -138,12 +172,8 @@
                     </form>
                 </div>
 
-                <div class="mt-auto pt-6 border-t border-slate-800">
-                    <a href="{{ url_for('temizle_veritabani') }}"
-                        onclick="return confirm('DİKKAT: Tüm veriler silinecek! Onaylıyor musunuz?')"
-                        class="flex items-center gap-2 px-4 py-2 text-red-400 hover:bg-red-400/10 rounded-lg transition text-sm">
-                        <i class="fa-solid fa-trash-can"></i> Veritabanını Sıfırla
-                    </a>
+                <div class="mt-auto px-4 pt-4">
+                    <p class="text-[10px] text-slate-500 text-center">v3.1 SPA Edition</p>
                 </div>
             </nav>
         </aside>
@@ -179,45 +209,52 @@
             </div>
             {% endif %}
 
-            <!-- Top Stats Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="text-xs font-semibold text-slate-500 uppercase">Bekleyen Sipariş</p>
-                            <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ toplam_bekleyen_siparis_m2 }} m²</h3>
+            <!-- SECTIONS CONTAINER -->
+            <div id="main-sections-container">
+
+                <!-- 1. DASHBOARD OVERVIEW -->
+                <div id="section-dashboard" class="content-section space-y-6">
+                    <!-- Reuse Top Stats Here -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-semibold text-slate-500 uppercase">Bekleyen Sipariş</p>
+                                    <h3 class="text-2xl font-bold text-slate-800 mt-1">{{ toplam_bekleyen_siparis_m2 }}
+                                        m²</h3>
+                                </div>
+                                <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                    <i class="fa-solid fa-clipboard-list text-xl"></i>
+                                </div>
+                            </div>
                         </div>
-                        <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                            <i class="fa-solid fa-clipboard-list text-xl"></i>
+
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs font-semibold text-slate-500 uppercase">Sıvalı Üretim İhtiyacı</p>
+                                    <h3
+                                        class="text-2xl font-bold {{ 'text-red-600' if toplam_gerekli_siva > 0 else 'text-green-600' }} mt-1">
+                                        {{ toplam_gerekli_siva }} m²
+                                    </h3>
+                                </div>
+                                <div class="p-2 bg-orange-50 text-orange-600 rounded-lg">
+                                    <i class="fa-solid fa-trowel-bricks text-xl"></i>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    <div class="bg-blue-50 border border-blue-100 rounded-lg p-8 text-center">
+                        <h2 class="text-2xl font-bold text-blue-900 mb-2">Hoşgeldiniz</h2>
+                        <p class="text-blue-700">Sol menüden işlem yapmak istediğiniz modülü seçiniz.</p>
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="text-xs font-semibold text-slate-500 uppercase">Sıvalı Üretim İhtiyacı</p>
-                            <h3
-                                class="text-2xl font-bold {{ 'text-red-600' if toplam_gerekli_siva > 0 else 'text-green-600' }} mt-1">
-                                {{ toplam_gerekli_siva }} m²
-                            </h3>
-                        </div>
-                        <div class="p-2 bg-orange-50 text-orange-600 rounded-lg">
-                            <i class="fa-solid fa-trowel-bricks text-xl"></i>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Add more stats here if calculated in backend -->
-            </div>
-
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-
-                <!-- LEFT COLUMN: Forms -->
-                <div class="xl:col-span-1 space-y-8">
-
-                    <!-- New Order Form -->
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- 2. NEW ORDER -->
+                <div id="section-new-order" class="content-section hidden">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-4xl mx-auto">
                         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
                             <h2 class="text-white font-bold flex items-center gap-2">
                                 <i class="fa-solid fa-plus-circle"></i> Yeni Sipariş Girişi
@@ -226,7 +263,6 @@
                         <div class="p-6">
                             <form action="/siparis" method="POST" id="newOrderForm">
                                 <input type="hidden" name="action" value="yeni_siparis">
-
                                 <div class="space-y-4">
                                     <div>
                                         <label class="block text-sm font-medium text-slate-700 mb-1">Müşteri Adı</label>
@@ -234,7 +270,6 @@
                                             class="w-full rounded-lg border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
                                             placeholder="Firma veya Kişi Adı">
                                     </div>
-
                                     <div class="grid grid-cols-2 gap-4">
                                         <div>
                                             <label class="block text-sm font-medium text-slate-700 mb-1">Sipariş
@@ -249,19 +284,15 @@
                                                 class="w-full rounded-lg border-slate-300 shadow-sm text-sm">
                                         </div>
                                     </div>
-
                                     <div class="border-t border-slate-100 pt-4">
                                         <label class="block text-sm font-medium text-slate-700 mb-2">Ürünler</label>
-                                        <div id="siparis-urun-container" class="space-y-3">
-                                            <!-- Rows inserted by JS -->
-                                        </div>
+                                        <div id="siparis-urun-container" class="space-y-3"></div>
                                         <button type="button" onclick="addRow(1)"
                                             class="mt-3 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-blue-500 hover:text-blue-500 transition text-sm font-medium">
                                             <i class="fa-solid fa-plus"></i> Satır Ekle
                                         </button>
                                     </div>
                                 </div>
-
                                 <button type="submit"
                                     class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg hover:shadow-xl transition transform active:scale-95">
                                     Siparişi Kaydet
@@ -269,16 +300,18 @@
                             </form>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Stock Operations -->
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- 3. PRODUCTION (Stock Ops) -->
+                <div id="section-production" class="content-section hidden">
+                    <div
+                        class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-4xl mx-auto">
                         <div class="bg-slate-100 px-6 py-4 border-b border-slate-200">
                             <h2 class="text-slate-700 font-bold flex items-center gap-2">
-                                <i class="fa-solid fa-arrow-right-arrow-left"></i> Stok Hareketleri
+                                <i class="fa-solid fa-arrow-right-arrow-left"></i> Üretim & Stok Hareketleri
                             </h2>
                         </div>
                         <div class="p-6 space-y-6">
-
                             <!-- Quick Add Actions -->
                             <div class="grid grid-cols-2 gap-4">
                                 <div class="bg-orange-50 p-4 rounded-lg border border-orange-100">
@@ -310,9 +343,7 @@
                                     </form>
                                 </div>
                             </div>
-
                             <hr class="border-slate-100">
-
                             <!-- Stock Action Form -->
                             <form action="/islem" method="POST" class="space-y-3">
                                 <div>
@@ -328,7 +359,6 @@
                                         <option value="iptal_sat_sivali">↩️ Sıvalı Satış İptal</option>
                                     </select>
                                 </div>
-
                                 <div class="grid grid-cols-2 gap-3">
                                     <select name="cinsi" class="w-full rounded-lg border-slate-300 text-sm">
                                         {% for c in CINSLER %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
@@ -337,25 +367,58 @@
                                         {% for k in KALINLIKLAR %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
                                     </select>
                                 </div>
-
                                 <input type="number" name="m2" min="1" required placeholder="Miktar (m²)"
                                     class="w-full rounded-lg border-slate-300 text-sm py-2">
-
                                 <button type="submit"
                                     class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-lg transition">
                                     İşlemi Uygula
                                 </button>
                             </form>
-
                         </div>
                     </div>
                 </div>
 
-                <!-- RIGHT COLUMN: Tables -->
-                <div class="xl:col-span-2 space-y-8">
+                <!-- 4. STOCK DEFINITIONS & TABLE -->
+                <div id="section-stock-defs" class="content-section hidden">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="p-4 bg-slate-50 border-b border-slate-100">
+                            <h3 class="font-bold text-slate-700">Detaylı Stok Görünümü</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50">
+                                    <tr>
+                                        <th class="px-4 py-3">Ürün</th>
+                                        <th class="px-4 py-3 text-right">Ham Stok</th>
+                                        <th class="px-4 py-3 text-right">Sıvalı Stok</th>
+                                        <th class="px-4 py-3 text-right bg-blue-50">Bekleyen</th>
+                                        <th class="px-4 py-3 text-right text-red-600 bg-red-50">Eksik (Sıvalı)</th>
+                                        <th class="px-4 py-3 text-right text-orange-600 bg-orange-50">Eksik (Ham)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    {% for s in stok_list %}
+                                    <tr class="hover:bg-slate-50">
+                                        <td class="px-4 py-2 font-medium">{{ s.cinsi }} {{ s.kalinlik }}</td>
+                                        <td class="px-4 py-2 text-right text-slate-600">{{ s.ham_m2 }}</td>
+                                        <td class="px-4 py-2 text-right text-slate-600">{{ s.sivali_m2 }}</td>
+                                        <td class="px-4 py-2 text-right font-bold bg-blue-50/30">{{ s.gerekli_siparis_m2
+                                            }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-red-600 bg-red-50/30">{{
+                                            s.sivali_eksik }}</td>
+                                        <td class="px-4 py-2 text-right font-bold text-orange-600 bg-orange-50/30">{{
+                                            s.ham_eksik }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
-                    <!-- Planning Summary -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 5. DAILY PLAN -->
+                <div id="section-daily-plan" class="content-section hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <!-- Plaster Plan -->
                         <div class="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
                             <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
@@ -433,8 +496,10 @@
                             {% endif %}
                         </div>
                     </div>
+                </div>
 
-                    <!-- Orders Table -->
+                <!-- 6. PENDING ORDERS -->
+                <div id="section-pending-orders" class="content-section hidden">
                     <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
                         <div
                             class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -445,7 +510,6 @@
                         </div>
                         <div class="p-6 overflow-x-auto">
                             <table id="ordersTable" class="w-full text-left border-collapse hidden md:table">
-                                <!-- Hidden on mobile, shown on md -->
                                 <thead>
                                     <tr>
                                         <!-- ID Column Hidden mobile -->
@@ -477,18 +541,14 @@
                                         <td>
                                             {% if siparis.durum == 'Bekliyor' %}
                                             <span
-                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                Bekliyor
-                                            </span>
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Bekliyor</span>
                                             {% if siparis.planlanan_is_gunu > 0 %}
                                             <div class="text-xs text-orange-600 font-bold mt-1">Plan: Gün {{
                                                 siparis.planlanan_is_gunu }}</div>
                                             {% endif %}
                                             {% else %}
                                             <span
-                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                Tamamlandı
-                                            </span>
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Tamamlandı</span>
                                             {% endif %}
                                         </td>
                                         <td>
@@ -521,7 +581,6 @@
                                                     </button>
                                                 </form>
                                                 {% elif siparis.durum == 'Tamamlandi' %}
-                                                <!-- UNDO BUTTON -->
                                                 <button
                                                     onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
                                                     class="p-2 bg-orange-100 text-orange-600 rounded hover:bg-orange-200 transition"
@@ -529,7 +588,6 @@
                                                     <i class="fa-solid fa-rotate-left"></i>
                                                 </button>
                                                 {% endif %}
-
                                                 <form action="/siparis" method="POST" class="inline"
                                                     onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
                                                     <input type="hidden" name="action" value="sil_siparis">
@@ -547,28 +605,22 @@
                                 </tbody>
                             </table>
 
-                            <!-- MOBILE CARDS VIEW (Visible only on small screens) -->
+                            <!-- MOBILE CARDS VIEW -->
                             <div class="md:hidden space-y-4">
                                 {% for siparis in siparisler %}
                                 <div
                                     class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 relative {{ 'bg-green-50/30' if siparis.durum == 'Tamamlandi' }}">
-                                    <!-- Status Badge Top Right -->
+                                    <!-- Status Badge -->
                                     <div class="absolute top-4 right-4">
                                         {% if siparis.durum == 'Bekliyor' %}
                                         <span
-                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-yellow-100 text-yellow-800">
-                                            Bekliyor
-                                        </span>
+                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-yellow-100 text-yellow-800">Bekliyor</span>
                                         {% else %}
                                         <span
-                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800">
-                                            Tamamlandı
-                                        </span>
+                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800">Tamamlandı</span>
                                         {% endif %}
                                     </div>
-
-                                    <!-- Main Info -->
-                                    <div class="pr-20"> <!-- Padding for badge -->
+                                    <div class="pr-20">
                                         <h4 class="text-lg font-bold text-slate-900">{{ siparis.musteri }}</h4>
                                         <div class="flex items-center gap-2 mt-1">
                                             <span
@@ -578,8 +630,6 @@
                                                 }}</span>
                                         </div>
                                     </div>
-
-                                    <!-- Dates & Amount Grid -->
                                     <div class="grid grid-cols-2 gap-4 mt-4 py-3 border-t border-b border-slate-50">
                                         <div>
                                             <p class="text-[10px] text-slate-400 uppercase font-semibold">Termin</p>
@@ -593,8 +643,6 @@
                                                 {{ siparis.bekleyen_m2 }} m²</p>
                                         </div>
                                     </div>
-
-                                    <!-- Action Buttons -->
                                     <div class="flex items-center justify-between mt-4 gap-2">
                                         {% if siparis.durum == 'Bekliyor' %}
                                         <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
@@ -624,8 +672,6 @@
                                             <i class="fa-solid fa-rotate-left mr-1"></i> Geri Al
                                         </button>
                                         {% endif %}
-
-                                        <!-- Delete is always available but small -->
                                         <form action="/siparis" method="POST" class="inline"
                                             onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
                                             <input type="hidden" name="action" value="sil_siparis">
@@ -641,46 +687,81 @@
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Stock Overview Table -->
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="p-4 bg-slate-50 border-b border-slate-100">
-                            <h3 class="font-bold text-slate-700">Detaylı Stok Görünümü</h3>
+                <!-- 7. ANALYSIS (Moved from Modal to Section) -->
+                <div id="section-analysis" class="content-section hidden">
+                    <div class="bg-white rounded-xl shadow-lg border border-slate-200 h-[85vh] flex flex-col">
+                        <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h2 class="text-xl font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-blue-600"></i> Ürün Sipariş Analizi
+                            </h2>
+                            <div class="relative w-64">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-search text-gray-400"></i>
+                                </div>
+                                <input type="text" id="analysisSearch"
+                                    class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm uppercase"
+                                    placeholder="Ürün Kodu Ara..." oninput="filterAnalysis(this.value)">
+                            </div>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-50">
-                                    <tr>
-                                        <th class="px-4 py-3">Ürün</th>
-                                        <th class="px-4 py-3 text-right">Ham Stok</th>
-                                        <th class="px-4 py-3 text-right">Sıvalı Stok</th>
-                                        <th class="px-4 py-3 text-right bg-blue-50">Bekleyen</th>
-                                        <th class="px-4 py-3 text-right text-red-600 bg-red-50">Eksik (Sıvalı)</th>
-                                        <th class="px-4 py-3 text-right text-orange-600 bg-orange-50">Eksik (Ham)</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100">
-                                    {% for s in stok_list %}
-                                    <tr class="hover:bg-slate-50">
-                                        <td class="px-4 py-2 font-medium">{{ s.cinsi }} {{ s.kalinlik }}</td>
-                                        <td class="px-4 py-2 text-right text-slate-600">{{ s.ham_m2 }}</td>
-                                        <td class="px-4 py-2 text-right text-slate-600">{{ s.sivali_m2 }}</td>
-                                        <td class="px-4 py-2 text-right font-bold bg-blue-50/30">{{ s.gerekli_siparis_m2
-                                            }}</td>
-                                        <td class="px-4 py-2 text-right font-bold text-red-600 bg-red-50/30">{{
-                                            s.sivali_eksik }}</td>
-                                        <td class="px-4 py-2 text-right font-bold text-orange-600 bg-orange-50/30">{{
-                                            s.ham_eksik }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+
+                        <div class="flex flex-1 overflow-hidden p-4 gap-4">
+                            <!-- Left: List -->
+                            <div class="w-1/3 flex flex-col border rounded-lg overflow-hidden bg-gray-50 h-full">
+                                <div
+                                    class="bg-gray-100 p-2 font-bold text-xs text-gray-500 uppercase flex justify-between">
+                                    <span>Ürün Kodu</span>
+                                    <span>Top. Bekleyen</span>
+                                </div>
+                                <div id="analysisList" class="flex-1 overflow-y-auto p-1 space-y-1">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Right: Details -->
+                            <div class="w-2/3 flex flex-col border rounded-lg overflow-hidden bg-white relative h-full">
+                                <div class="bg-blue-50 p-3 font-bold text-blue-800 border-b border-blue-100 flex justify-between items-center"
+                                    id="analysisDetailHeader">
+                                    <span>Detaylar</span>
+                                    <span class="text-xs font-normal text-blue-600">Ürün Seçiniz</span>
+                                </div>
+                                <div id="analysisDetailContent" class="hidden flex-1 overflow-y-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Müşteri</th>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Tarih</th>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Termin</th>
+                                                <th
+                                                    class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                    Miktar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200" id="analysisDetailTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="analysisEmptyState"
+                                    class="flex-1 flex flex-col items-center justify-center text-gray-400">
+                                    <i class="fa-solid fa-mouse-pointer text-4xl mb-2 opacity-50"></i>
+                                    <p>Detayları görmek için listeden bir ürün seçin.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-
                 </div>
-            </div>
-        </main>
+
+            </div> <!-- END SECTIONS CONTAINER -->
+
+    </div>
+    </main>
     </div>
 
     <!-- MODALS -->
@@ -806,96 +887,6 @@
     </div>
 
     <!-- Analysis Modal -->
-    <div id="analysisModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
-                onclick="closeModal('analysisModal')"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-            <div
-                class="inline-block px-4 pt-5 pb-4 overflow-hidden text-left align-bottom transition-all transform bg-white shadow-xl rounded-xl sm:my-8 sm:align-middle sm:max-w-4xl w-full sm:p-6">
-
-                <div class="flex justify-between items-center border-b pb-3 mb-4">
-                    <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <i class="fa-solid fa-chart-pie text-blue-600"></i> Ürün Sipariş Analizi
-                    </h3>
-                    <button onclick="closeModal('analysisModal')" class="text-gray-400 hover:text-gray-600">
-                        <i class="fa-solid fa-times text-xl"></i>
-                    </button>
-                </div>
-
-                <div class="flex flex-col gap-4 h-[70vh]"> <!-- Fixed Height Container -->
-
-                    <!-- Search & Filter -->
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-search text-gray-400"></i>
-                        </div>
-                        <input type="text" id="analysisSearch"
-                            class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-lg uppercase"
-                            placeholder="Ürün Kodu Ara (Örn: B 001)..." oninput="filterAnalysis(this.value)">
-                    </div>
-
-                    <!-- Content Layout: Split View -->
-                    <div class="flex flex-1 gap-4 overflow-hidden">
-
-                        <!-- Left: Product List -->
-                        <div class="w-1/3 flex flex-col border rounded-lg overflow-hidden bg-gray-50">
-                            <div class="bg-gray-100 p-2 font-bold text-xs text-gray-500 uppercase flex justify-between">
-                                <span>Ürün Kodu</span>
-                                <span>Top. Bekleyen</span>
-                            </div>
-                            <div id="analysisList" class="flex-1 overflow-y-auto p-1 space-y-1">
-                                <!-- JS will populate items here -->
-                            </div>
-                        </div>
-
-                        <!-- Right: Details -->
-                        <div class="w-2/3 flex flex-col border rounded-lg overflow-hidden bg-white relative">
-                            <div class="bg-blue-50 p-3 font-bold text-blue-800 border-b border-blue-100 flex justify-between items-center"
-                                id="analysisDetailHeader">
-                                <span>Detaylar</span>
-                                <span class="text-xs font-normal text-blue-600">Ürün Seçiniz</span>
-                            </div>
-
-                            <div id="analysisDetailContent" class="hidden flex-1 overflow-y-auto">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            <th scope="col"
-                                                class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Müşteri</th>
-                                            <th scope="col"
-                                                class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Sipariş Tarihi</th>
-                                            <th scope="col"
-                                                class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Termin</th>
-                                            <th scope="col"
-                                                class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Miktar (m²)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200" id="analysisDetailTableBody">
-                                        <!-- Details Rows -->
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <!-- Empty State -->
-                            <div id="analysisEmptyState"
-                                class="flex-1 flex flex-col items-center justify-center text-gray-400">
-                                <i class="fa-solid fa-mouse-pointer text-4xl mb-2 opacity-50"></i>
-                                <p>Detayları görmek için listeden bir ürün seçin.</p>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </div>
-
     <!-- Undo Modal -->
     <div id="undoModal" class="fixed inset-0 z-50 hidden overflow-y-auto">
         <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
