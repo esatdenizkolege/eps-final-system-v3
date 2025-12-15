@@ -505,19 +505,24 @@ def calculate_planning(conn):
         
         # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
         bugun = datetime.now().date()
-        sevkiyat_plan_detay = defaultdict(list)
+        sevkiyat_plan_detay = {} 
         for i in range(0, 5): 
             plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
             cur.execute("""
                 SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
                 FROM siparisler 
                 WHERE durum='Bekliyor' AND termin_tarihi = %s
-                ORDER BY termin_tarihi ASC
+                ORDER BY musteri ASC, urun_kodu ASC
             """, (plan_tarihi,))
             sevkiyatlar = cur.fetchall()
             
             if sevkiyatlar:
-                sevkiyat_plan_detay[plan_tarihi] = sevkiyatlar
+                # Müşteri bazlı gruplama
+                gunluk_plan = defaultdict(list)
+                for s in sevkiyatlar:
+                    gunluk_plan[s['musteri']].append(s)
+                
+                sevkiyat_plan_detay[plan_tarihi] = dict(gunluk_plan)
         
         cur.close()
         return toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map
