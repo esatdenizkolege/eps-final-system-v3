@@ -1265,37 +1265,45 @@ def api_siparis_analizi():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        # Fetch active orders
+        
+        # Query active orders from 'siparisler' table
         cur.execute("""
-            SELECT b.musteri_adi, b.m2, b.hazirlanan_m2, b.urun_kodu, b.siparis_tarihi, b.termin_tarihi
-            FROM boyali_siparis_takip_tablo b
-            WHERE b.durum != 'Tamamlandı'
+            SELECT musteri, bekleyen_m2, urun_kodu, siparis_tarihi, termin_tarihi
+            FROM siparisler
+            WHERE durum = 'Bekliyor'
         """)
         rows = cur.fetchall()
+        
         cur.close()
         conn.close()
 
         # Aggregation Logic
-        analysis = {} # Code -> {total_pending, details: []}
+        analysis = {} 
 
         for row in rows:
-            musteri, m2, hazirlanan, kod, s_tarih, t_tarih = row
+            # Handle row access (dict or tuple)
+            if isinstance(row, dict):
+                 musteri = row['musteri']
+                 bekleyen = row['bekleyen_m2']
+                 kod = row['urun_kodu']
+                 s_tarih = row['siparis_tarihi']
+                 t_tarih = row['termin_tarihi']
+            else:
+                 # Ensure order matches SELECT
+                 musteri, bekleyen, kod, s_tarih, t_tarih = row
             
             # Normalize Code
             if not kod:
                 kod = "BİLİNMEYEN"
             kod = kod.strip().upper()
 
-            # Calculate Pending
+            # Ensure numeric
             try:
-                m2_val = float(m2) if m2 else 0
-                hazirlanan_val = float(hazirlanan) if hazirlanan else 0
-                bekleyen = m2_val - hazirlanan_val
-                if bekleyen < 0: bekleyen = 0
+                bekleyen_val = float(bekleyen) if bekleyen else 0
             except:
-                bekleyen = 0
+                bekleyen_val = 0
 
-            if bekleyen <= 0.01: continue # Skip if basically done
+            if bekleyen_val <= 0.01: continue 
 
             if kod not in analysis:
                 analysis[kod] = {
@@ -1304,12 +1312,17 @@ def api_siparis_analizi():
                     "detaylar": []
                 }
             
-            analysis[kod]["toplam_bekleyen"] += bekleyen
+            analysis[kod]["toplam_bekleyen"] += bekleyen_val
+            
+            # Format dates
+            s_str = s_tarih.isoformat() if hasattr(s_tarih, 'isoformat') else str(s_tarih) if s_tarih else "-"
+            t_str = t_tarih.isoformat() if hasattr(t_tarih, 'isoformat') else str(t_tarih) if t_tarih else "-"
+
             analysis[kod]["detaylar"].append({
                 "musteri": musteri,
-                "bekleyen_m2": round(bekleyen, 2),
-                "siparis_tarihi": str(s_tarih),
-                "termin_tarihi": str(t_tarih)
+                "bekleyen_m2": round(bekleyen_val, 2),
+                "siparis_tarihi": s_str,
+                "termin_tarihi": t_str
             })
 
         # Convert to list and Sort by Total Pending Descending
@@ -1318,7 +1331,7 @@ def api_siparis_analizi():
         
         # Round final totals
         for item in result:
-            item['toplam_bekleyen'] = round(item['toplam_bekleyen'], 2)
+             item['toplam_bekleyen'] = round(item['toplam_bekleyen'], 2)
 
         return jsonify(result)
 
