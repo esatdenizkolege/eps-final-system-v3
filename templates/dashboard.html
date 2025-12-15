@@ -941,6 +941,46 @@
 
 
 
+
+        // SPA Navigation Logic
+        function showSection(sectionId, linkElement) {
+            console.log("Switching to section:", sectionId);
+
+            // 1. Hide all sections
+            document.querySelectorAll('.content-section').forEach(el => el.classList.add('hidden'));
+
+            // 2. Show target section
+            const target = document.getElementById(sectionId);
+            if (target) {
+                target.classList.remove('hidden');
+            } else {
+                console.error("Section not found:", sectionId);
+                return;
+            }
+
+            // 3. Update Sidebar Active State
+            if (linkElement) {
+                document.querySelectorAll('#sidebar nav a.nav-item').forEach(el => {
+                    el.classList.remove('bg-blue-600', 'text-white', 'shadow-md', 'bg-white/10');
+                    el.classList.add('text-slate-300', 'hover:bg-slate-800', 'hover:text-white');
+                });
+
+                // Reset classes for the clicked element and apply active properties
+                linkElement.classList.remove('text-slate-300', 'hover:bg-slate-800', 'hover:text-white');
+                linkElement.classList.add('bg-blue-600', 'text-white', 'shadow-md');
+            }
+
+            // 4. Special Section Logic
+            if (sectionId === 'section-analysis') {
+                if (typeof loadAnalysisData === 'function') {
+                    loadAnalysisData();
+                } else {
+                    // Fallback if renamed function isn't ready yet
+                    if (typeof openAnalysisModal === 'function') openAnalysisModal();
+                }
+            }
+        }
+
         // Load Product Codes from API
         async function loadProductCodes() {
             try {
@@ -1258,7 +1298,7 @@
         // Create global state for analysis
         window.analysisData = [];
 
-        async function openAnalysisModal() {
+        async function loadAnalysisData() {
             const modal = document.getElementById('analysisModal');
             const listContainer = document.getElementById('analysisList');
             const searchInput = document.getElementById('analysisSearch');
@@ -1383,6 +1423,24 @@
                     pageLength: 25,
                     order: [[5, "asc"]] // Sort by Termin Tarihi (Index 5 now)
                 });
+
+                // Init SPA: Activate first visible section or default
+                console.log("Initializing SPA...");
+                const activeLink = document.querySelector('#sidebar nav a.bg-blue-600');
+                if (activeLink) {
+                    // If one is hardcoded active in HTML, use it
+                    const onclickVal = activeLink.getAttribute('onclick'); // "showSection('...')"
+                    if (onclickVal) {
+                        // execute it to ensure state is correct
+                        // We can't eval easily, but we can trust the click
+                        activeLink.click();
+                    }
+                } else {
+                    // Default to Dashboard or Pending Orders
+                    // Let's try to click the "Bekleyen Siparişler" as it was default in the html snippet I saw
+                    const defaultLink = document.querySelector("a[onclick*='section-pending-orders']");
+                    if (defaultLink) showSection('section-pending-orders', defaultLink);
+                }
 
                 console.log("DEBUG: Frontend Script Initialized Successfully");
             } catch (e) {
