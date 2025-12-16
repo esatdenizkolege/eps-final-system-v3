@@ -315,30 +315,31 @@
                                 <input type="hidden" name="action" value="yeni_siparis">
                                 <div class="space-y-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1">Müşteri Adı</label>
+                                        <label class="block text-base font-medium text-slate-700 mb-1">Müşteri
+                                            Adı</label>
                                         <input type="text" name="musteri" required
-                                            class="w-full rounded-lg border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm"
+                                            class="w-full rounded-lg border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm text-base py-2 px-3"
                                             placeholder="Firma veya Kişi Adı">
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label class="block text-sm font-medium text-slate-700 mb-1">Sipariş
+                                            <label class="block text-base font-medium text-slate-700 mb-1">Sipariş
                                                 Tarihi</label>
                                             <input type="date" name="siparis_tarihi" value="{{ today }}" required
-                                                class="w-full rounded-lg border-slate-300 shadow-sm text-sm">
+                                                class="w-full rounded-lg border-slate-300 shadow-sm text-base py-2">
                                         </div>
                                         <div>
-                                            <label class="block text-sm font-medium text-slate-700 mb-1">Termin
+                                            <label class="block text-base font-medium text-slate-700 mb-1">Termin
                                                 Tarihi</label>
                                             <input type="date" name="termin_tarihi" required
-                                                class="w-full rounded-lg border-slate-300 shadow-sm text-sm">
+                                                class="w-full rounded-lg border-slate-300 shadow-sm text-base py-2">
                                         </div>
                                     </div>
                                     <div class="border-t border-slate-100 pt-4">
-                                        <label class="block text-sm font-medium text-slate-700 mb-2">Ürünler</label>
+                                        <label class="block text-base font-medium text-slate-700 mb-2">Ürünler</label>
                                         <div id="siparis-urun-container" class="space-y-3"></div>
                                         <button type="button" onclick="addRow(1)"
-                                            class="mt-3 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-blue-500 hover:text-blue-500 transition text-sm font-medium">
+                                            class="mt-3 w-full py-3 border-2 border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-blue-500 hover:text-blue-500 transition text-base font-medium">
                                             <i class="fa-solid fa-plus"></i> Satır Ekle
                                         </button>
                                     </div>
@@ -592,16 +593,16 @@
                                     {% for siparis in siparisler %}
                                     <tr
                                         class="hover:bg-slate-50 transition {{ 'bg-green-50/50' if siparis.durum == 'Tamamlandi' }}">
-                                        <td class="hidden md:table-cell text-xs text-slate-400 font-mono">#{{ siparis.id
+                                        <td class="hidden md:table-cell text-sm text-slate-400 font-mono">#{{ siparis.id
                                             }}</td>
-                                        <td class="text-sm font-medium">{{ siparis.musteri }}</td>
-                                        <td class="font-mono font-semibold">{{ siparis.urun_kodu }}</td>
-                                        <td class="hidden sm:table-cell text-xs text-slate-500">{{ siparis.cinsi }} {{
+                                        <td class="text-base font-medium">{{ siparis.musteri }}</td>
+                                        <td class="font-mono font-semibold text-base">{{ siparis.urun_kodu }}</td>
+                                        <td class="hidden sm:table-cell text-sm text-slate-500">{{ siparis.cinsi }} {{
                                             siparis.kalinlik }}</td>
-                                        <td class="hidden sm:table-cell text-xs text-slate-500">{{
+                                        <td class="hidden sm:table-cell text-sm text-slate-500">{{
                                             siparis.siparis_tarihi }}</td>
-                                        <td class="font-bold text-slate-700 text-sm">{{ siparis.termin_tarihi }}</td>
-                                        <td class="font-bold text-slate-700">{{ siparis.bekleyen_m2 }}</td>
+                                        <td class="font-bold text-slate-700 text-base">{{ siparis.termin_tarihi }}</td>
+                                        <td class="font-bold text-slate-700 text-base">{{ siparis.bekleyen_m2 }}</td>
                                         <td>
                                             {% if siparis.durum == 'Bekliyor' %}
                                             <span
@@ -1230,11 +1231,11 @@
                         <select name="urun_kodu_compat_${rowIndex}" class="hidden"></select> <!-- Backend Compat (Renamed to avoid conflict) -->
                         
                         <div class="flex-1 grid grid-cols-2 gap-2">
-                             <select class="cinsi_select w-full text-xs rounded border-slate-300" name="cinsi_${rowIndex}" required onchange="filterProductCodes(this)">
+                             <select class="cinsi_select w-full text-sm rounded border-slate-300 py-2" name="cinsi_${rowIndex}" required onchange="filterProductCodes(this)">
                                 <option value="">Cins</option>
                                 ${CINS_OPTIONS}
                              </select>
-                             <select class="kalinlik_select w-full text-xs rounded border-slate-300" name="kalinlik_${rowIndex}" required onchange="filterProductCodes(this)">
+                             <select class="kalinlik_select w-full text-sm rounded border-slate-300 py-2" name="kalinlik_${rowIndex}" required onchange="filterProductCodes(this)">
                                 <option value="">Kalınlık</option>
                                 ${KALINLIK_OPTIONS}
                              </select>
@@ -1242,7 +1243,7 @@
                         <div class="w-1/4 relative">
                              <input type="text" 
                                     name="urun_kodu_${rowIndex}" 
-                                    class="urun_kodu_input w-full text-xs rounded border-slate-300 uppercase font-mono" 
+                                    class="urun_kodu_input w-full text-sm rounded border-slate-300 uppercase font-mono py-2" 
                                     required 
                                     placeholder="Kod (Yaz/Seç)" 
                                     list="list_urun_kodu_${rowIndex}"
@@ -1251,7 +1252,7 @@
                              <datalist id="list_urun_kodu_${rowIndex}"></datalist>
                         </div>
                         <div class="w-1/5">
-                             <input type="number" name="m2_${rowIndex}" placeholder="M²" required class="w-full text-xs rounded border-slate-300">
+                             <input type="number" name="m2_${rowIndex}" placeholder="M²" required class="w-full text-sm rounded border-slate-300 py-2">
                         </div>
                         <button type="button" onclick="document.getElementById('row-${rowIndex}').remove()" class="text-red-500 hover:text-red-700 px-2">
                             <i class="fa-solid fa-times"></i>
@@ -1407,10 +1408,10 @@
                 div.className = "flex justify-between items-center bg-white p-3 rounded border border-gray-200 hover:bg-blue-50 cursor-pointer transition select-none group";
                 div.innerHTML = `
                     <div class="flex flex-col">
-                        <span class="font-bold text-gray-700">${item.urun_kodu}</span>
-                        ${item.aciklama ? `<span class="text-[10px] text-gray-400 font-normal">(${item.aciklama})</span>` : ''}
+                        <span class="font-bold text-gray-700 text-base">${item.urun_kodu}</span>
+                        ${item.aciklama ? `<span class="text-xs text-gray-400 font-normal">(${item.aciklama})</span>` : ''}
                     </div>
-                    <div class="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded group-hover:bg-blue-100">${item.toplam_bekleyen.toLocaleString('tr-TR')} m²</div>
+                    <div class="text-base font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded group-hover:bg-blue-100">${item.toplam_bekleyen.toLocaleString('tr-TR')} m²</div>
                 `;
                 // Pass OBJECT, not ID (to handle duplicates like "BOYASIZ")
                 div.onclick = () => showAnalysisDetail(item);
