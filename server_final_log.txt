@@ -18,3 +18,4 @@ Press CTRL+C to quit
 127.0.0.1 - - [15/Dec/2025 13:26:43] "GET / HTTP/1.1" 200 -
 127.0.0.1 - - [15/Dec/2025 13:26:44] "GET /api/urun_kodlari HTTP/1.1" 200 -
 127.0.0.1 - - [15/Dec/2025 13:26:44] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [15/Dec/2025 16:55:46] "GET / HTTP/1.1" 200 -

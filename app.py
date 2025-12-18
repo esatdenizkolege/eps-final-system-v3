@@ -273,9 +273,24 @@ def init_db():
                 termin_tarihi DATE, 
                 bekleyen_m2 INTEGER, 
                 durum TEXT NOT NULL, 
-                planlanan_is_gunu INTEGER 
+                planlanan_is_gunu INTEGER,
+                toplam_m2 REAL DEFAULT 0
             ); 
         """)
+
+        # Migration: Add toplam_m2 if not exists
+        try:
+            cur.execute("ALTER TABLE siparisler ADD COLUMN toplam_m2 REAL DEFAULT 0")
+            conn.commit()
+            print("MIGRATION: 'toplam_m2' column added.")
+            # Migrate existing data: assume toplam = bekleyen for legacy
+            cur.execute("UPDATE siparisler SET toplam_m2 = bekleyen_m2 WHERE toplam_m2 = 0 OR toplam_m2 IS NULL")
+            conn.commit()
+            print("MIGRATION: Existing data updated for 'toplam_m2'.")
+        except Exception as e:
+            # Ignore error if column already exists
+            if conn: conn.rollback()
+            pass
 
         # Sipariş Geçmişi Tablosu (Kısmi Tamamlama Logları)
         cur.execute("""
@@ -852,9 +867,9 @@ def handle_siparis_islem():
 
             cur.execute("""
                 UPDATE siparisler SET 
-                musteri = %s, urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s, termin_tarihi = %s
+                musteri = %s, urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s, toplam_m2 = %s, termin_tarihi = %s
                 WHERE id = %s 
-            """, (yeni_musteri, yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_termin_tarihi, siparis_id))
+            """, (yeni_musteri, yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_m2, yeni_termin_tarihi, siparis_id))
             
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_musteri}, {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m². Yeni Termin: {yeni_termin_tarihi}"
 
@@ -875,13 +890,19 @@ def handle_siparis_islem():
                     cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
                     message = f"✅ Sipariş ID {siparis_id} TAMAMLANDI. ({hazirlanan_m2} m² düşüldü, kalan sıfırlandı)."
                 
-                    # Log to History
                     cur.execute("INSERT INTO siparis_gecmisi (siparis_id, islem_tipi, miktar) VALUES (%s, 'Kismi', %s)", (siparis_id, hazirlanan_m2))
 
                 else:
                     # Kısmi bitti
+                    # toplam_m2 stays the same, only bekleyen decreases
                     cur.execute("UPDATE siparisler SET bekleyen_m2 = %s WHERE id = %s", (yeni_bekleyen, siparis_id))
-                    message = f"✅ Sipariş ID {siparis_id} güncellendi. {hazirlanan_m2} m² düşüldü. KALAN: {yeni_bekleyen} m²."
+                    
+                    # Calculate percentage for message
+                    cur.execute("SELECT toplam_m2 FROM siparisler WHERE id = %s", (siparis_id,))
+                    t_row = cur.fetchone()
+                    total = t_row['toplam_m2'] if t_row and t_row['toplam_m2'] > 0 else (current_bekleyen) 
+                    
+                    message = f"✅ Sipariş ID {siparis_id} güncellendi. {hazirlanan_m2} m² düşüldü. KALAN: {yeni_bekleyen} / {total} m²."
                     
                     # Log to History
                     cur.execute("INSERT INTO siparis_gecmisi (siparis_id, islem_tipi, miktar) VALUES (%s, 'Kismi', %s)", (siparis_id, hazirlanan_m2))
@@ -952,6 +973,35 @@ def handle_siparis_islem():
             siparis_id = request.form['siparis_id']
             cur.execute("DELETE FROM siparisler WHERE id = %s", (siparis_id,))
             conn.commit(); message = f"✅ Sipariş ID {siparis_id} veritabanından **kalıcı olarak silindi**."
+        
+        # YENİ EK: Toplu İşlemler
+        elif action == 'guncelle_tarih_toplu':
+            siparis_ids = request.form.getlist('siparis_ids[]')
+            yeni_termin = request.form['yeni_termin_tarihi']
+            if not siparis_ids or not yeni_termin:
+                raise ValueError("Seçili sipariş veya tarih yok.")
+            
+            cur.execute(f"UPDATE siparisler SET termin_tarihi = %s WHERE id IN ({','.join(['%s']*len(siparis_ids))})", [yeni_termin] + siparis_ids)
+            conn.commit()
+            message = f"✅ {len(siparis_ids)} adet siparişin tarihi {yeni_termin} olarak güncellendi."
+
+        elif action == 'tamamla_toplu':
+            siparis_ids = request.form.getlist('siparis_ids[]')
+            if not siparis_ids:
+                raise ValueError("Seçili sipariş yok.")
+            
+            cur.execute(f"UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id IN ({','.join(['%s']*len(siparis_ids))})", siparis_ids)
+            conn.commit()
+            message = f"✅ {len(siparis_ids)} adet sipariş topluca tamamlandı."
+
+        elif action == 'sil_toplu':
+            siparis_ids = request.form.getlist('siparis_ids[]')
+            if not siparis_ids:
+                raise ValueError("Seçili sipariş yok.")
+            
+            cur.execute(f"DELETE FROM siparisler WHERE id IN ({','.join(['%s']*len(siparis_ids))})", siparis_ids)
+            conn.commit()
+            message = f"✅ {len(siparis_ids)} adet sipariş kalıcı olarak silindi."
             
         cur.close()
     except psycopg2.IntegrityError: 
