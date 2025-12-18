@@ -858,7 +858,7 @@ def handle_siparis_islem():
             
             # Ürün kodundan cins/kalınlık tespiti
             # Check existing order first
-            cur.execute("SELECT urun_kodu, cinsi, kalinlik FROM siparisler WHERE id = %s", (siparis_id,))
+            cur.execute("SELECT urun_kodu, cinsi, kalinlik, bekleyen_m2, toplam_m2 FROM siparisler WHERE id = %s", (siparis_id,))
             current_order = cur.fetchone()
             
             yeni_cinsi = None
@@ -889,13 +889,25 @@ def handle_siparis_islem():
 
             print(f"DEBUG: Editing Order {siparis_id}. New Customer: {yeni_musteri}, Code: {yeni_urun_kodu}, Date: {yeni_termin_tarihi}") # DEBUG LOG
 
+            # Calculate new Total M2 while preserving completed amount
+            # Logic: New Total = New Pending (yeni_m2) + Previously Completed
+            prev_toplam = current_order.get('toplam_m2', 0)
+            prev_bekleyen = current_order.get('bekleyen_m2', 0)
+            completed_amount = max(0, prev_toplam - prev_bekleyen)
+            
+            # If prev_toplam was 0 (legacy), ignore completed_amount logic and just set to new m2
+            if prev_toplam == 0:
+                 yeni_toplam_m2 = yeni_m2
+            else:
+                 yeni_toplam_m2 = yeni_m2 + completed_amount
+
             cur.execute("""
                 UPDATE siparisler SET 
                 musteri = %s, urun_kodu = %s, cinsi = %s, kalinlik = %s, bekleyen_m2 = %s, toplam_m2 = %s, termin_tarihi = %s
                 WHERE id = %s 
-            """, (yeni_musteri, yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_m2, yeni_termin_tarihi, siparis_id))
+            """, (yeni_musteri, yeni_urun_kodu, yeni_cinsi, yeni_kalinlik, yeni_m2, yeni_toplam_m2, yeni_termin_tarihi, siparis_id))
             
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_musteri}, {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m². Yeni Termin: {yeni_termin_tarihi}"
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} güncellendi: {yeni_musteri}, {yeni_cinsi} {yeni_kalinlik}, {yeni_m2} m² (Eski Tamamlanan Korundu: {completed_amount} m²). Yeni Termin: {yeni_termin_tarihi}"
 
         # YENİ EK: Kısmi Tamamlama
         elif action == 'kismi_tamamla':
@@ -1274,9 +1286,9 @@ def api_stok_verileri():
                     'ham_coverage': max(0, sivali_eksik - max(0, sivali_eksik - ham_stok)) 
                 }
 
-        cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi DESC")
+        cur.execute("SELECT * FROM siparisler ORDER BY termin_tarihi ASC, siparis_tarihi ASC")
         siparisler = cur.fetchall()
-        
+
         siparis_listesi = []
         for s in siparisler:
             s_dict = dict(s) 
