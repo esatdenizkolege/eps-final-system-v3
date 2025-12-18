@@ -606,7 +606,6 @@
                             <table id="ordersTable" class="w-full text-left border-collapse hidden md:table">
                                 <thead>
                                     <tr>
-                                        <!-- ID Column Hidden mobile -->
                                         <th class="w-4 p-4">
                                             <div class="flex items-center">
                                                 <input id="checkbox-all" type="checkbox"
@@ -617,10 +616,15 @@
                                         <th class="hidden md:table-cell">ID</th>
                                         <th>Müşteri</th>
                                         <th>Kod</th>
-                                        <th class="hidden sm:table-cell">Detay</th>
+                                        <th>Detay</th>
                                         <th class="hidden sm:table-cell">Sipariş Tar.</th>
-                                        <th>Termin Tar.</th>
-                                        <th>M²</th>
+                                        <th class="font-bold text-slate-700 text-base">Termin Tar.</th>
+
+                                        <!-- 3 SÜTUN İSTEĞİ ÜZERİNE GÜNCELLENDİ -->
+                                        <th class="bg-gray-50 text-gray-600 text-right">Toplam m²</th>
+                                        <th class="bg-green-50 text-green-700 text-right">Basılan m²</th>
+                                        <th class="bg-blue-50 text-blue-700 text-right">Kalan m²</th>
+
                                         <th>Durum</th>
                                         <th>İşlemler</th>
                                     </tr>
@@ -644,25 +648,25 @@
                                             siparis.kalinlik }}</td>
                                         <td class="hidden sm:table-cell text-sm text-slate-500">{{
                                             siparis.siparis_tarihi }}</td>
-                                        <td class="font-bold text-slate-700 text-base">{{ siparis.termin_tarihi }}</td>
-                                        <td class="text-base">
+                                        <td class="font-bold text-slate-700 text-base center-text">{{
+                                            siparis.termin_tarihi }}</td>
+
+                                        <!-- 3 SÜTUN GÖRÜNÜMÜ -->
+                                        <td class="text-right text-gray-600 font-medium bg-gray-50">
+                                            {{ siparis.toplam_m2 if siparis.toplam_m2 > 0 else siparis.bekleyen_m2 }}
+                                        </td>
+                                        <td class="text-right text-green-600 font-bold bg-green-50">
                                             {% if siparis.toplam_m2 and siparis.toplam_m2 > siparis.bekleyen_m2 %}
-                                            <div class="flex flex-col">
-                                                <span class="font-bold text-blue-600" title="Kalan Miktar">{{
-                                                    siparis.bekleyen_m2 }} m²</span>
-                                                <span class="text-[10px] text-green-600 font-medium"
-                                                    title="Tamamlanan Miktar">
-                                                    <i class="fa-solid fa-check"></i> {{
-                                                    "{:.1f}".format(siparis.toplam_m2 - siparis.bekleyen_m2) }} m²
-                                                </span>
-                                                <span class="text-[10px] text-gray-400" title="Toplam Sipariş">
-                                                    Top: {{ siparis.toplam_m2 }} m²
-                                                </span>
-                                            </div>
+                                            {{ "{:.1f}".format(siparis.toplam_m2 - siparis.bekleyen_m2) }}
                                             {% else %}
-                                            <span class="font-bold text-slate-700">{{ siparis.bekleyen_m2 }}</span>
+                                            0
                                             {% endif %}
                                         </td>
+                                        <td class="text-right text-blue-600 font-bold bg-blue-50">
+                                            {{ siparis.bekleyen_m2 }}
+                                        </td>
+                                        <!-- BİTİŞ -->
+
                                         <td>
                                             {% if siparis.durum == 'Bekliyor' %}
                                             <span
@@ -685,6 +689,7 @@
                                                     data-kod="{{ siparis.urun_kodu }}"
                                                     data-termin="{{ siparis.termin_tarihi }}"
                                                     data-musteri="{{ siparis.musteri }}"
+                                                    data-toplam="{{ siparis.toplam_m2 }}"
                                                     onclick="openEditModalFromData(this)"
                                                     class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
                                                     title="Düzenle">
@@ -984,8 +989,13 @@
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Yeni M²</label>
+                                <label class="block text-sm font-medium text-gray-700">Kalan M² (Revize)</label>
                                 <input type="number" name="yeni_m2" id="edit_m2" required
+                                    class="mt-1 w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Toplam M² (Opsiyonel)</label>
+                                <input type="number" name="manuel_toplam_m2" id="edit_toplam_m2" placeholder="Otomatik"
                                     class="mt-1 w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                             </div>
                             <div>
@@ -1435,7 +1445,7 @@
             document.getElementById(modalId).classList.add('hidden');
         }
 
-        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin, musteri) {
+        function openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin, musteri, toplam = '') {
             const modal = document.getElementById('editModal');
             modal.classList.remove('hidden');
 
@@ -1444,6 +1454,10 @@
             document.getElementById('edit_termin').value = termin;
             document.getElementById('edit_musteri').value = musteri;
             document.getElementById('edit_urun_kodu_hidden').value = urun_kodu;
+
+            // New Total Field
+            const totalInput = document.getElementById('edit_toplam_m2');
+            totalInput.value = (toplam && toplam > 0) ? toplam : ''; // Leave empty if 0/null
 
             const form = document.getElementById('editForm');
             const cinsiSelect = form.querySelector('.cinsi_select');
@@ -1467,8 +1481,9 @@
             const urun_kodu = button.getAttribute('data-kod');
             const termin = button.getAttribute('data-termin');
             const musteri = button.getAttribute('data-musteri');
+            const toplam = button.getAttribute('data-toplam');
 
-            openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin, musteri);
+            openEditModal(id, cinsi, kalinlik, m2, urun_kodu, termin, musteri, toplam);
         }
 
         async function openPartialModal(id, currentM2, code) {

@@ -816,7 +816,7 @@ def handle_siparis_islem():
                         
                     if m2 > 0:
                         siparis_kodu = get_next_siparis_kodu(conn)
-                        cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if urun_kodu in codes), None)
+                        cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if any(str(c).lower() == str(urun_kodu).lower() for c in codes)), None)
                         if not cins_kalinlik_key:
                             raise ValueError(f"Ürün kodu {urun_kodu} için cins/kalınlık bulunamadı. Lütfen ürün kodlarını kontrol edin.")
                             
@@ -895,11 +895,22 @@ def handle_siparis_islem():
             prev_bekleyen = current_order.get('bekleyen_m2', 0)
             completed_amount = max(0, prev_toplam - prev_bekleyen)
             
-            # If prev_toplam was 0 (legacy), ignore completed_amount logic and just set to new m2
-            if prev_toplam == 0:
-                 yeni_toplam_m2 = yeni_m2
+            # Check for Manual Total Override
+            manuel_toplam = request.form.get('manuel_toplam_m2')
+            if manuel_toplam and manuel_toplam.strip():
+                 try:
+                     yeni_toplam_m2 = int(manuel_toplam)
+                     message_extra = f"(Manual Toplam: {yeni_toplam_m2} m²)"
+                 except ValueError:
+                     yeni_toplam_m2 = yeni_m2 + completed_amount # Fallback
+                     message_extra = "(Auto Calculated)"
             else:
-                 yeni_toplam_m2 = yeni_m2 + completed_amount
+                 # Logic: New Total = New Pending (yeni_m2) + Previously Completed
+                 if prev_toplam == 0:
+                      yeni_toplam_m2 = yeni_m2
+                 else:
+                      yeni_toplam_m2 = yeni_m2 + completed_amount
+                 message_extra = ""
 
             cur.execute("""
                 UPDATE siparisler SET 
