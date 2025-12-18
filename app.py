@@ -4,6 +4,11 @@ import os
 
 from flask import Flask, render_template_string, request, redirect, url_for, jsonify, render_template, flash
 import traceback
+import logging
+
+# Configure Logging to File
+logging.basicConfig(filename='server_log.txt', level=logging.DEBUG, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 # PostgreSQL'e bağlanmak için psycopg2 kütüphanesini kullanıyoruz.
 import psycopg2 
@@ -177,6 +182,9 @@ class SQLiteCursorWrapper:
         # PostgreSQL ILIKE -> SQLite LIKE (Yerel geliştirme için yeterli)
         sql_sqlite = sql_sqlite.replace(' ILIKE ', ' LIKE ')
         
+        # PostgreSQL %s -> SQLite ? translation
+        sql_sqlite = sql_sqlite.replace('%s', '?')
+        
         # Helper to convert params if necessary (e.g. Booleans to 0/1 if SQLite doesn't handle them automatically)
         # SQLite handles True/False as 1/0 usually, but safer to force if needed.
         # psycopg2 adapts automatically. sqlite3 default adapter works for standard types.
@@ -186,6 +194,19 @@ class SQLiteCursorWrapper:
         except Exception as e:
             print(f"SQLite Execute Error: {e} | SQL: {sql_sqlite}")
             raise e
+
+    def executemany(self, sql, params_seq):
+        sql_sqlite = sql.replace('%s', '?')
+        if "SERIAL PRIMARY KEY" in sql_sqlite.upper():
+            sql_sqlite = sql_sqlite.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
+        sql_sqlite = sql_sqlite.replace(' ILIKE ', ' LIKE ')
+        # No recursive replace needed if we just did it once
+        
+        try:
+             return self.cursor.executemany(sql_sqlite, params_seq)
+        except Exception as e:
+             print(f"SQLite Executemany Error: {e} | SQL: {sql_sqlite}")
+             raise e
 
     def fetchone(self):
         return self.cursor.fetchone()
@@ -214,6 +235,9 @@ class SQLiteConnectionWrapper:
 
     def commit(self):
         self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
 
     def close(self):
         self.conn.close()
@@ -983,6 +1007,7 @@ def handle_siparis_islem():
             
             cur.execute(f"UPDATE siparisler SET termin_tarihi = %s WHERE id IN ({','.join(['%s']*len(siparis_ids))})", [yeni_termin] + siparis_ids)
             conn.commit()
+            
             message = f"✅ {len(siparis_ids)} adet siparişin tarihi {yeni_termin} olarak güncellendi."
 
         elif action == 'tamamla_toplu':
@@ -1013,6 +1038,7 @@ def handle_siparis_islem():
     except Exception as e: 
         if conn: conn.rollback()
         message = f"❌ Veritabanı Hatası: {str(e)}"
+        # logging.error(f"DATABASE ERROR ...") # Removed for Clean Code
     finally: 
         if conn: conn.close()
     return redirect(url_for('index', message=message))
