@@ -172,14 +172,27 @@
                     Sistem Araçları
                 </div>
                 <!-- Capacity Settings inline wrapper -->
-                <div class="bg-slate-800/50 rounded-lg p-3 mt-2 border border-slate-700">
-                    <form action="/ayarla/kapasite" method="POST" class="space-y-2">
-                        <label class="text-xs text-slate-400">Günlük Sıva Kapasitesi (m²)</label>
+                <div class="bg-slate-800/50 rounded-lg p-3 mt-2 border border-slate-700 space-y-3">
+                    <form action="/ayarla/kapasite" method="POST" class="space-y-1">
+                        <label class="text-xs text-slate-400 font-semibold">Günlük Sıva Kapasitesi (m²)</label>
                         <div class="flex gap-2">
                             <input type="number" name="kapasite_m2" value="{{ gunluk_siva_m2 }}"
                                 class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500">
                             <button type="submit"
                                 class="bg-blue-600 hover:bg-blue-500 px-3 rounded text-white text-xs">Kaydet</button>
+                        </div>
+                    </form>
+
+                    <div class="border-t border-slate-700 pt-2"></div>
+
+                    <form action="/ayarla/baski_kapasite" method="POST" class="space-y-1">
+                        <label class="text-xs text-slate-400 font-semibold">Günlük Baskı Kapasitesi (m²)</label>
+                        <div class="flex gap-2">
+                            <input type="number" name="baski_kapasite_m2"
+                                value="{{ gunluk_baski_m2 if gunluk_baski_m2 else 600 }}"
+                                class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-500 px-3 rounded text-white text-xs">Kaydet</button>
                         </div>
                     </form>
                 </div>
@@ -523,7 +536,11 @@
                         <!-- Baskı Planı (Formerly Sevkiyat Planı) -->
                         <div class="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
                             <h3 class="font-bold text-indigo-800 mb-3 flex items-center gap-2">
-                                <i class="fa-solid fa-print"></i> Baskı Planı
+                                <span class="flex items-center gap-2"><i class="fa-solid fa-print"></i> Baskı
+                                    Planı</span>
+                                <span
+                                    class="text-xs font-normal text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full ml-auto border border-indigo-200">Max:
+                                    {{ gunluk_baski_m2 }} m²/gün</span>
                             </h3>
                             {% if baski_plan_detay %}
                             <div class="space-y-4">
@@ -552,7 +569,11 @@
                                                 {% for s in urunler %}
                                                 <li
                                                     class="flex justify-between text-[11px] hover:bg-white/50 rounded px-1 transition">
-                                                    <span class="text-slate-600 font-mono">{{ s.urun_kodu }}</span>
+                                                    <span class="text-slate-600 font-mono flex items-center gap-1">
+                                                        {{ s.urun_kodu }}
+                                                        <span class="text-[9px] text-red-400 font-medium"
+                                                            title="Termin">({{ s.termin_tarihi }})</span>
+                                                    </span>
                                                     <span class="font-semibold text-slate-700">{{ s.bekleyen_m2 }}
                                                         m²</span>
                                                 </li>

@@ -613,29 +613,63 @@ def calculate_planning(conn):
             if ihtiyac_index >= len(siva_uretim_sirasli_ihtiyac):
                 break 
         
-        # 5 Günlük Baskı Planı (Termin tarihine göre)
+        # 5 Günlük Baskı Planı (Kapasite Bazlı)
         bugun = datetime.now().date()
-        baski_plan_detay = {} 
-        for i in range(0, 5): 
-            plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
-            cur.execute("""
-                SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2 
-                FROM siparisler 
-                WHERE durum='Bekliyor' AND termin_tarihi = %s
-                ORDER BY musteri ASC, urun_kodu ASC
-            """, (plan_tarihi,))
-            sevkiyatlar = cur.fetchall()
+        baski_plan_detay = defaultdict(list)
+        
+        # Load Printing Capacity
+        kapasite_data = load_data(KAPASITE_FILE)
+        gunluk_baski_m2 = kapasite_data.get('gunluk_baski_m2', 600)
+        
+        # Get ALL pending orders sorted by Deadline (Termin)
+        cur.execute("""
+            SELECT siparis_kodu, musteri, urun_kodu, bekleyen_m2, termin_tarihi
+            FROM siparisler 
+            WHERE durum='Bekliyor'
+            ORDER BY termin_tarihi ASC, siparis_tarihi ASC
+        """)
+        bekleyen_baski_siparisleri = [dict(r) for r in cur.fetchall()]
+        
+        current_day_offset = 0
+        kalan_baski_kapasite = gunluk_baski_m2
+        
+        for siparis in bekleyen_baski_siparisleri:
+            m2_ihtiyac = siparis['bekleyen_m2']
             
-            if sevkiyatlar:
-                # Müşteri bazlı gruplama
-                gunluk_plan = defaultdict(list)
-                for s in sevkiyatlar:
-                    gunluk_plan[s['musteri']].append(s)
+            while m2_ihtiyac > 0 and current_day_offset < 10: # Limit loop safety
+                plan_tarihi = (bugun + timedelta(days=current_day_offset)).strftime('%Y-%m-%d')
                 
-                baski_plan_detay[plan_tarihi] = dict(gunluk_plan)
+                m2_yapilacak = min(m2_ihtiyac, kalan_baski_kapasite)
+                
+                # Add to plan
+                # Check if we can merge with existing entry for this customer/product on this day?
+                # For simplicity, just append. The template groups by Customer anyway.
+                # However, for the template's 'customer grouping', we need to match the structure:
+                # { Date: { Customer: [List of Items] } }
+                
+                # Since we are iterating orders, we might split an order across days.
+                # We need to create a "partial order item" for the plan.
+                
+                partial_item = siparis.copy()
+                partial_item['bekleyen_m2'] = m2_yapilacak
+                
+                # Helper to insert into the complex dict structure is hard inside the loop if using defaultdict(list).
+                # Current structure expected by template: { 'YYYY-MM-DD': { 'MusteriA': [ {props...}, ... ] } }
+                
+                if plan_tarihi not in baski_plan_detay:
+                    baski_plan_detay[plan_tarihi] = defaultdict(list)
+                
+                baski_plan_detay[plan_tarihi][siparis['musteri']].append(partial_item)
+                
+                m2_ihtiyac -= m2_yapilacak
+                kalan_baski_kapasite -= m2_yapilacak
+                
+                if kalan_baski_kapasite <= 0:
+                    current_day_offset += 1
+                    kalan_baski_kapasite = gunluk_baski_m2
         
         cur.close()
-        return toplam_gerekli_siva, kapasite, siva_plan_detay, baski_plan_detay, stok_map
+        return toplam_gerekli_siva, kapasite, siva_plan_detay, baski_plan_detay, stok_map, gunluk_baski_m2
         
     except Exception as e:
         print(f"--- KRİTİK HATA LOGU (calculate_planning) ---")
@@ -675,7 +709,7 @@ def index():
 
     # 2. Planlama ve Stok Haritasını Hesapla
     # 2. Planlama ve Stok Haritasını Hesapla
-    toplam_gerekli_siva, kapasite, siva_plan_detay, baski_plan_detay, stok_map = calculate_planning(conn)
+    toplam_gerekli_siva, kapasite, siva_plan_detay, baski_plan_detay, stok_map, gunluk_baski_m2 = calculate_planning(conn)
     
     # 3. Stok ve Eksik Analizi Listesini Oluştur
     stok_list = []
@@ -728,7 +762,7 @@ def index():
     cur.close()
     conn.close()
     
-    return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, baski_plan_detay=baski_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
+    return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, gunluk_baski_m2=gunluk_baski_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, baski_plan_detay=baski_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
 
 # --- KRİTİK VERİ KURTARMA ROTASI ---
 @app.route('/admin/data_repair', methods=['GET'])
@@ -1175,6 +1209,21 @@ def ayarla_kapasite():
         if kapasite_m2 <= 0: raise ValueError("Kapasite pozitif bir sayı olmalıdır.")
         save_data({"gunluk_siva_m2": kapasite_m2}, KAPASITE_FILE)
         message = f"✅ Günlük sıva kapasitesi {kapasite_m2} m² olarak ayarlandı."
+    except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
+    return redirect(url_for('index', message=message))
+
+@app.route('/ayarla/baski_kapasite', methods=['POST'])
+def ayarla_baski_kapasite():
+    """Günlük baskı kapasitesini ayarlar."""
+    try:
+        kapasite_m2 = int(request.form['baski_kapasite_m2'])
+        if kapasite_m2 <= 0: raise ValueError("Kapasite pozitif bir sayı olmalıdır.")
+        
+        current_data = load_data(KAPASITE_FILE)
+        current_data['gunluk_baski_m2'] = kapasite_m2
+        save_data(current_data, KAPASITE_FILE)
+        
+        message = f"✅ Günlük baskı kapasitesi {kapasite_m2} m² olarak ayarlandı."
     except ValueError as e: message = f"❌ Hata: {str(e)}"
     except Exception as e: message = f"❌ Kaydetme Hatası: {str(e)}"
     return redirect(url_for('index', message=message))
@@ -1358,7 +1407,7 @@ def api_stok_verileri():
         CINSLER = load_cinsler()
         VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
         
-        toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, baski_plan_detay, stok_map = calculate_planning(conn)
+        toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, baski_plan_detay, stok_map, gunluk_baski_m2 = calculate_planning(conn)
         
         stok_data = {}
         deficit_analysis = {}
