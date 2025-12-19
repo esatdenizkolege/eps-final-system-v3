@@ -574,7 +574,7 @@ def calculate_planning(conn):
         siva_plan_detay = defaultdict(list) 
         ihtiyac_index = 0
         
-            for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
+        for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
             kalan_kapasite_bugun = kapasite
             # KRİTİK DÜZELTME: O gün üretilecek ürünleri birleştirmek için geçici sözlük
             # Key: Product Name -> Value: {total_m2: 0, customers: {Name: m2}}
