@@ -648,9 +648,9 @@ def index():
         # DEBUG LOGGING FOR STATUS
         print(f"DEBUG: Siparis ID: {s['id']}, Durum: '{s['durum']}', Bekleyen: {s['bekleyen_m2']}, Musteri: {s['musteri']}")
         s_dict = dict(s) 
-        if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
+        if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi'] and not isinstance(s_dict['siparis_tarihi'], str):
             s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
-        if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
+        if 'termin_tarihi' in s_dict and s_dict['termin_tarihi'] and not isinstance(s_dict['termin_tarihi'], str):
             s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
         siparis_listesi.append(s_dict)
     
@@ -845,8 +845,15 @@ def handle_siparis_islem():
             
         elif action == 'tamamla_siparis':
             siparis_id = request.form['siparis_id']
+            
+            # Stoktan Düşme İşlemi
+            cur.execute("SELECT cinsi, kalinlik, bekleyen_m2 FROM siparisler WHERE id = %s", (siparis_id,))
+            order = cur.fetchone()
+            if order:
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (order['bekleyen_m2'], order['cinsi'], order['kalinlik']))
+
             cur.execute("UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id = %s", (siparis_id,))
-            conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı olarak işaretlendi."
+            conn.commit(); message = f"✅ Sipariş ID {siparis_id} tamamlandı ve stoktan düşüldü."
             
         # KRİTİK DÜZELTME: SİPARİŞİ DÜZENLEME (Termin Tarihi Eklendi)
         elif action == 'duzenle_siparis':
@@ -925,10 +932,12 @@ def handle_siparis_islem():
             siparis_id = request.form['siparis_id']
             hazirlanan_m2 = int(request.form['hazirlanan_m2'])
             
-            cur.execute("SELECT bekleyen_m2 FROM siparisler WHERE id = %s", (siparis_id,))
+            cur.execute("SELECT bekleyen_m2, cinsi, kalinlik FROM siparisler WHERE id = %s", (siparis_id,))
             row = cur.fetchone()
             
             if row:
+                # Stoktan Düş
+                cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (hazirlanan_m2, row['cinsi'], row['kalinlik']))
                 current_bekleyen = row['bekleyen_m2']
                 yeni_bekleyen = current_bekleyen - hazirlanan_m2
                 
@@ -971,10 +980,12 @@ def handle_siparis_islem():
                 miktar = gecmis_row['miktar']
                 
                 # Siparişi bul ve miktarı geri ekle
-                cur.execute("SELECT bekleyen_m2, durum FROM siparisler WHERE id = %s", (siparis_id,))
+                cur.execute("SELECT bekleyen_m2, durum, cinsi, kalinlik FROM siparisler WHERE id = %s", (siparis_id,))
                 siparis_row = cur.fetchone()
                 
                 if siparis_row:
+                    # Stoğa geri ekle
+                    cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (miktar, siparis_row['cinsi'], siparis_row['kalinlik']))
                     yeni_bekleyen = siparis_row['bekleyen_m2'] + miktar
                     
                     # Eğer sipariş 'Tamamlandi' ise tekrar 'Bekliyor'a çek
@@ -1001,10 +1012,12 @@ def handle_siparis_islem():
             if geri_alinacak_m2 <= 0:
                 raise ValueError("Geri alınacak miktar 0'dan büyük olmalıdır.")
 
-            cur.execute("SELECT durum FROM siparisler WHERE id = %s", (siparis_id,))
+            cur.execute("SELECT durum, cinsi, kalinlik FROM siparisler WHERE id = %s", (siparis_id,))
             row = cur.fetchone()
             
             if row and row['durum'] == 'Tamamlandi':
+                # Stoğa Geri Ekle
+                cur.execute("UPDATE stok SET m2 = m2 + %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (geri_alinacak_m2, row['cinsi'], row['kalinlik']))
                 cur.execute("""
                     UPDATE siparisler 
                     SET durum = 'Bekliyor', bekleyen_m2 = %s, planlanan_is_gunu = 0 
@@ -1038,6 +1051,13 @@ def handle_siparis_islem():
             if not siparis_ids:
                 raise ValueError("Seçili sipariş yok.")
             
+            # Stoktan düş (Her bir sipariş için)
+            for sid in siparis_ids:
+                cur.execute("SELECT cinsi, kalinlik, bekleyen_m2 FROM siparisler WHERE id = %s", (sid,))
+                ord_row = cur.fetchone()
+                if ord_row:
+                    cur.execute("UPDATE stok SET m2 = m2 - %s WHERE cinsi = %s AND kalinlik = %s AND asama = 'Sivali'", (ord_row['bekleyen_m2'], ord_row['cinsi'], ord_row['kalinlik']))
+
             cur.execute(f"UPDATE siparisler SET durum = 'Tamamlandi', bekleyen_m2 = 0, planlanan_is_gunu = 0 WHERE id IN ({','.join(['%s']*len(siparis_ids))})", siparis_ids)
             conn.commit()
             message = f"✅ {len(siparis_ids)} adet sipariş topluca tamamlandı."
@@ -1303,9 +1323,9 @@ def api_stok_verileri():
         siparis_listesi = []
         for s in siparisler:
             s_dict = dict(s) 
-            if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi']:
+            if 'siparis_tarihi' in s_dict and s_dict['siparis_tarihi'] and not isinstance(s_dict['siparis_tarihi'], str):
                 s_dict['siparis_tarihi'] = s_dict['siparis_tarihi'].isoformat()
-            if 'termin_tarihi' in s_dict and s_dict['termin_tarihi']:
+            if 'termin_tarihi' in s_dict and s_dict['termin_tarihi'] and not isinstance(s_dict['termin_tarihi'], str):
                 s_dict['termin_tarihi'] = s_dict['termin_tarihi'].isoformat()
             s_dict['id'] = str(s_dict['id']) 
             siparis_listesi.append(s_dict)
@@ -1320,7 +1340,7 @@ def api_stok_verileri():
                 formatted_urunler = []
                 for item in urunler:
                     item_dict = dict(item)
-                    if 'termin_tarihi' in item_dict and item_dict['termin_tarihi']:
+                    if 'termin_tarihi' in item_dict and item_dict['termin_tarihi'] and not isinstance(item_dict['termin_tarihi'], str):
                         item_dict['termin_tarihi'] = item_dict['termin_tarihi'].isoformat()
                     formatted_urunler.append(item_dict)
                 formatted_musteriler[musteri] = formatted_urunler
