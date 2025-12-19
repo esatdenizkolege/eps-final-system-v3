@@ -527,457 +527,449 @@
                             </h3>
                             {% if baski_plan_detay %}
                             <div class="space-y-4">
-                                <div class="space-y-4">
-                                    {% for tarih, musteriler in baski_plan_detay.items() %}
-                                    <div class="bg-white p-3 rounded-lg shadow-sm border border-indigo-100">
-                                        <div
-                                            class="flex justify-between items-center mb-3 pb-2 border-b border-indigo-50">
-                                            <div class="flex items-center gap-2">
-                                                <i class="fa-regular fa-calendar text-indigo-500"></i>
-                                                <span class="font-bold text-indigo-800 text-sm">{{ tarih }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="space-y-3">
-                                            {% for musteri, urunler in musteriler.items() %}
-                                            <div class="bg-slate-50 rounded p-2 border border-slate-100">
-                                                <div class="flex justify-between items-center mb-2">
-                                                    <h5
-                                                        class="text-xs font-bold text-slate-800 flex items-center gap-1">
-                                                        <i class="fa-solid fa-user text-blue-400 text-[10px]"></i> {{
-                                                        musteri }}
-                                                    </h5>
-                                                    <span
-                                                        class="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                                        {{ urunler|sum(attribute='bekleyen_m2') }} m²
-                                                    </span>
-                                                </div>
-                                                <ul class="space-y-1 pl-2 border-l-2 border-blue-200/50">
-                                                    {% for s in urunler %}
-                                                    <li
-                                                        class="flex justify-between text-[11px] hover:bg-white/50 rounded px-1 transition">
-                                                        <span class="text-slate-600 font-mono">{{ s.urun_kodu }}</span>
-                                                        <span class="font-semibold text-slate-700">{{ s.bekleyen_m2 }}
-                                                            m²</span>
-                                                    </li>
-                                                    {% endfor %}
-                                                </ul>
-                                            </div>
-                                            {% endfor %}
+                                {% for tarih, musteriler in baski_plan_detay.items() %}
+                                <div class="bg-white p-3 rounded-lg shadow-sm border border-indigo-100">
+                                    <div class="flex justify-between items-center mb-3 pb-2 border-b border-indigo-50">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-regular fa-calendar text-indigo-500"></i>
+                                            <span class="font-bold text-indigo-800 text-sm">{{ tarih }}</span>
                                         </div>
                                     </div>
-                                    {% endfor %}
+                                    <div class="space-y-3">
+                                        {% for musteri, urunler in musteriler.items() %}
+                                        <div class="bg-slate-50 rounded p-2 border border-slate-100">
+                                            <div class="flex justify-between items-center mb-2">
+                                                <h5 class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                                    <i class="fa-solid fa-user text-blue-400 text-[10px]"></i> {{
+                                                    musteri }}
+                                                </h5>
+                                                <span
+                                                    class="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                                    {{ urunler|sum(attribute='bekleyen_m2') }} m²
+                                                </span>
+                                            </div>
+                                            <ul class="space-y-1 pl-2 border-l-2 border-blue-200/50">
+                                                {% for s in urunler %}
+                                                <li
+                                                    class="flex justify-between text-[11px] hover:bg-white/50 rounded px-1 transition">
+                                                    <span class="text-slate-600 font-mono">{{ s.urun_kodu }}</span>
+                                                    <span class="font-semibold text-slate-700">{{ s.bekleyen_m2 }}
+                                                        m²</span>
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
                                 </div>
-                                {% else %}
-                                <p class="text-sm text-indigo-600 italic">Yakın tarihli baskı/sevkiyat yok.</p>
-                                {% endif %}
+                                {% endfor %}
                             </div>
+                            {% else %}
+                            <p class="text-sm text-indigo-600 italic">Yakın tarihli baskı/sevkiyat yok.</p>
+                            {% endif %}
                         </div>
                     </div>
+                </div>
 
-                    <!-- 6. PENDING ORDERS -->
-                    <div id="section-pending-orders" class="content-section hidden">
-                        <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-                            <div
-                                class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                                <h2 class="text-xl font-bold text-slate-800">Sipariş Listesi</h2>
-                                <span class="bg-slate-100 text-slate-600 px-4 py-1 rounded-full text-sm font-semibold">
-                                    Toplam Bekleyen: {{ toplam_bekleyen_siparis_m2 }} m²
+                <!-- 6. PENDING ORDERS -->
+                <div id="section-pending-orders" class="content-section hidden">
+                    <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+                        <div
+                            class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h2 class="text-xl font-bold text-slate-800">Sipariş Listesi</h2>
+                            <span class="bg-slate-100 text-slate-600 px-4 py-1 rounded-full text-sm font-semibold">
+                                Toplam Bekleyen: {{ toplam_bekleyen_siparis_m2 }} m²
+                            </span>
+                        </div>
+                        <div class="p-6 overflow-x-auto">
+                            <!-- Bulk Action Toolbar -->
+                            <div id="bulkActionToolbar"
+                                class="hidden bg-blue-50 p-3 mb-4 rounded-lg flex items-center justify-between border border-blue-100 transition-all">
+                                <span class="text-sm font-bold text-blue-700 flex items-center gap-2">
+                                    <i class="fa-solid fa-check-double"></i> <span id="selectedCount">0</span>
+                                    sipariş
+                                    seçildi
                                 </span>
-                            </div>
-                            <div class="p-6 overflow-x-auto">
-                                <!-- Bulk Action Toolbar -->
-                                <div id="bulkActionToolbar"
-                                    class="hidden bg-blue-50 p-3 mb-4 rounded-lg flex items-center justify-between border border-blue-100 transition-all">
-                                    <span class="text-sm font-bold text-blue-700 flex items-center gap-2">
-                                        <i class="fa-solid fa-check-double"></i> <span id="selectedCount">0</span>
-                                        sipariş
-                                        seçildi
-                                    </span>
-                                    <div class="flex gap-2">
-                                        <button onclick="openBulkDateModal()"
-                                            class="text-xs bg-white text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-2 rounded font-medium transition">
-                                            <i class="fa-solid fa-calendar-days mr-1"></i> Tarih Güncelle
-                                        </button>
-                                        <button onclick="submitBulkAction('tamamla_toplu')"
-                                            class="text-xs bg-white text-green-600 hover:bg-green-600 hover:text-white border border-green-200 px-3 py-2 rounded font-medium transition">
-                                            <i class="fa-solid fa-check mr-1"></i> Tamamla
-                                        </button>
-                                        <button onclick="submitBulkAction('sil_toplu')"
-                                            class="text-xs bg-white text-red-600 hover:bg-red-600 hover:text-white border border-red-200 px-3 py-2 rounded font-medium transition">
-                                            <i class="fa-solid fa-trash mr-1"></i> Sil
-                                        </button>
-                                    </div>
+                                <div class="flex gap-2">
+                                    <button onclick="openBulkDateModal()"
+                                        class="text-xs bg-white text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-2 rounded font-medium transition">
+                                        <i class="fa-solid fa-calendar-days mr-1"></i> Tarih Güncelle
+                                    </button>
+                                    <button onclick="submitBulkAction('tamamla_toplu')"
+                                        class="text-xs bg-white text-green-600 hover:bg-green-600 hover:text-white border border-green-200 px-3 py-2 rounded font-medium transition">
+                                        <i class="fa-solid fa-check mr-1"></i> Tamamla
+                                    </button>
+                                    <button onclick="submitBulkAction('sil_toplu')"
+                                        class="text-xs bg-white text-red-600 hover:bg-red-600 hover:text-white border border-red-200 px-3 py-2 rounded font-medium transition">
+                                        <i class="fa-solid fa-trash mr-1"></i> Sil
+                                    </button>
                                 </div>
+                            </div>
 
-                                <table id="ordersTable" class="w-full text-left border-collapse hidden md:table">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-4 p-4">
-                                                <div class="flex items-center">
-                                                    <input id="checkbox-all" type="checkbox"
-                                                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                                        onclick="toggleAllCheckboxes(this)">
-                                                </div>
-                                            </th>
-                                            <th class="hidden md:table-cell">ID</th>
-                                            <th>Müşteri</th>
-                                            <th>Kod</th>
-                                            <th>Detay</th>
-                                            <th class="hidden sm:table-cell">Sipariş Tar.</th>
-                                            <th class="font-bold text-slate-700 text-base">Termin Tar.</th>
+                            <table id="ordersTable" class="w-full text-left border-collapse hidden md:table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-4 p-4">
+                                            <div class="flex items-center">
+                                                <input id="checkbox-all" type="checkbox"
+                                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    onclick="toggleAllCheckboxes(this)">
+                                            </div>
+                                        </th>
+                                        <th class="hidden md:table-cell">ID</th>
+                                        <th>Müşteri</th>
+                                        <th>Kod</th>
+                                        <th>Detay</th>
+                                        <th class="hidden sm:table-cell">Sipariş Tar.</th>
+                                        <th class="font-bold text-slate-700 text-base">Termin Tar.</th>
 
-                                            <!-- 3 SÜTUN İSTEĞİ ÜZERİNE GÜNCELLENDİ -->
-                                            <th class="bg-gray-50 text-gray-600 text-right">Toplam m²</th>
-                                            <th class="bg-green-50 text-green-700 text-right">Basılan m²</th>
-                                            <th class="bg-blue-50 text-blue-700 text-right">Kalan m²</th>
+                                        <!-- 3 SÜTUN İSTEĞİ ÜZERİNE GÜNCELLENDİ -->
+                                        <th class="bg-gray-50 text-gray-600 text-right">Toplam m²</th>
+                                        <th class="bg-green-50 text-green-700 text-right">Basılan m²</th>
+                                        <th class="bg-blue-50 text-blue-700 text-right">Kalan m²</th>
 
-                                            <th>Durum</th>
-                                            <th>İşlemler</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for siparis in siparisler %}
-                                        <tr
-                                            class="hover:bg-slate-50 transition {{ 'bg-green-50/50' if siparis.durum == 'Tamamlandi' }}">
-                                            <td class="w-4 p-4">
-                                                <div class="flex items-center">
-                                                    <input type="checkbox" name="siparis_ids[]" value="{{ siparis.id }}"
-                                                        class="order-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                                        onchange="updateBulkToolbar()">
-                                                </div>
-                                            </td>
-                                            <td class="hidden md:table-cell text-sm text-slate-400 font-mono">#{{
-                                                siparis.id
-                                                }}</td>
-                                            <td class="text-base font-medium">{{ siparis.musteri }}</td>
-                                            <td class="font-mono font-semibold text-base">{{ siparis.urun_kodu }}</td>
-                                            <td class="hidden sm:table-cell text-sm text-slate-500">{{ siparis.cinsi }}
-                                                {{
-                                                siparis.kalinlik }}</td>
-                                            <td class="hidden sm:table-cell text-sm text-slate-500">{{
-                                                siparis.siparis_tarihi }}</td>
-                                            <td class="font-bold text-slate-700 text-base center-text">{{
-                                                siparis.termin_tarihi }}</td>
-
-                                            <!-- 3 SÜTUN GÖRÜNÜMÜ -->
-                                            <td class="text-right text-gray-600 font-medium bg-gray-50">
-                                                {{ siparis.toplam_m2 if siparis.toplam_m2 > 0 else siparis.bekleyen_m2
-                                                }}
-                                            </td>
-                                            <td class="text-right text-green-600 font-bold bg-green-50">
-                                                {% if siparis.toplam_m2 and siparis.toplam_m2 > siparis.bekleyen_m2 %}
-                                                {{ "{:.1f}".format(siparis.toplam_m2 - siparis.bekleyen_m2) }}
-                                                {% else %}
-                                                0
-                                                {% endif %}
-                                            </td>
-                                            <td class="text-right text-blue-600 font-bold bg-blue-50">
-                                                {{ siparis.bekleyen_m2 }}
-                                            </td>
-                                            <!-- BİTİŞ -->
-
-                                            <td>
-                                                {% if siparis.durum == 'Bekliyor' %}
-                                                <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Bekliyor</span>
-                                                {% if siparis.planlanan_is_gunu > 0 %}
-                                                <div class="text-xs text-orange-600 font-bold mt-1">Plan: Gün {{
-                                                    siparis.planlanan_is_gunu }}</div>
-                                                {% endif %}
-                                                {% else %}
-                                                <span
-                                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Tamamlandı</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                <div class="flex gap-2">
-                                                    {% if siparis.durum == 'Bekliyor' %}
-                                                    <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
-                                                        data-kalinlik="{{ siparis.kalinlik }}"
-                                                        data-m2="{{ siparis.bekleyen_m2 }}"
-                                                        data-kod="{{ siparis.urun_kodu }}"
-                                                        data-termin="{{ siparis.termin_tarihi }}"
-                                                        data-musteri="{{ siparis.musteri }}"
-                                                        data-toplam="{{ siparis.toplam_m2 }}"
-                                                        onclick="openEditModalFromData(this)"
-                                                        class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
-                                                        title="Düzenle">
-                                                        <i class="fa-solid fa-pen"></i>
-                                                    </button>
-                                                    <button
-                                                        onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')"
-                                                        class="p-2 bg-cyan-100 text-cyan-600 rounded hover:bg-cyan-200 transition"
-                                                        title="Kısmi">
-                                                        <i class="fa-solid fa-scissors"></i>
-                                                    </button>
-                                                    <form action="/siparis" method="POST" class="inline">
-                                                        <input type="hidden" name="action" value="tamamla_siparis">
-                                                        <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                                                        <button type="submit"
-                                                            class="p-2 bg-green-100 text-green-600 rounded hover:bg-green-200 transition"
-                                                            title="Tamamla">
-                                                            <i class="fa-solid fa-check"></i>
-                                                        </button>
-                                                    </form>
-                                                    {% elif siparis.durum == 'Tamamlandi' %}
-                                                    <button
-                                                        onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
-                                                        class="p-2 bg-orange-100 text-orange-600 rounded hover:bg-orange-200 transition"
-                                                        title="Geri Al">
-                                                        <i class="fa-solid fa-rotate-left"></i>
-                                                    </button>
-                                                    {% endif %}
-                                                    <form action="/siparis" method="POST" class="inline"
-                                                        onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
-                                                        <input type="hidden" name="action" value="sil_siparis">
-                                                        <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                                                        <button type="submit"
-                                                            class="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
-                                                            title="Sil">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-
-                                <!-- MOBILE CARDS VIEW -->
-                                <div class="md:hidden space-y-4">
+                                        <th>Durum</th>
+                                        <th>İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                                     {% for siparis in siparisler %}
-                                    <div
-                                        class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 relative {{ 'bg-green-50/30' if siparis.durum == 'Tamamlandi' }}">
-                                        <!-- Status Badge -->
-                                        <div class="absolute top-4 right-4">
+                                    <tr
+                                        class="hover:bg-slate-50 transition {{ 'bg-green-50/50' if siparis.durum == 'Tamamlandi' }}">
+                                        <td class="w-4 p-4">
+                                            <div class="flex items-center">
+                                                <input type="checkbox" name="siparis_ids[]" value="{{ siparis.id }}"
+                                                    class="order-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                                    onchange="updateBulkToolbar()">
+                                            </div>
+                                        </td>
+                                        <td class="hidden md:table-cell text-sm text-slate-400 font-mono">#{{
+                                            siparis.id
+                                            }}</td>
+                                        <td class="text-base font-medium">{{ siparis.musteri }}</td>
+                                        <td class="font-mono font-semibold text-base">{{ siparis.urun_kodu }}</td>
+                                        <td class="hidden sm:table-cell text-sm text-slate-500">{{ siparis.cinsi }}
+                                            {{
+                                            siparis.kalinlik }}</td>
+                                        <td class="hidden sm:table-cell text-sm text-slate-500">{{
+                                            siparis.siparis_tarihi }}</td>
+                                        <td class="font-bold text-slate-700 text-base center-text">{{
+                                            siparis.termin_tarihi }}</td>
+
+                                        <!-- 3 SÜTUN GÖRÜNÜMÜ -->
+                                        <td class="text-right text-gray-600 font-medium bg-gray-50">
+                                            {{ siparis.toplam_m2 if siparis.toplam_m2 > 0 else siparis.bekleyen_m2
+                                            }}
+                                        </td>
+                                        <td class="text-right text-green-600 font-bold bg-green-50">
+                                            {% if siparis.toplam_m2 and siparis.toplam_m2 > siparis.bekleyen_m2 %}
+                                            {{ "{:.1f}".format(siparis.toplam_m2 - siparis.bekleyen_m2) }}
+                                            {% else %}
+                                            0
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-right text-blue-600 font-bold bg-blue-50">
+                                            {{ siparis.bekleyen_m2 }}
+                                        </td>
+                                        <!-- BİTİŞ -->
+
+                                        <td>
                                             {% if siparis.durum == 'Bekliyor' %}
                                             <span
-                                                class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-yellow-100 text-yellow-800">Bekliyor</span>
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Bekliyor</span>
+                                            {% if siparis.planlanan_is_gunu > 0 %}
+                                            <div class="text-xs text-orange-600 font-bold mt-1">Plan: Gün {{
+                                                siparis.planlanan_is_gunu }}</div>
+                                            {% endif %}
                                             {% else %}
                                             <span
-                                                class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800">Tamamlandı</span>
+                                                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Tamamlandı</span>
                                             {% endif %}
-                                        </div>
-                                        <div class="pr-20">
-                                            <h4 class="text-lg font-bold text-slate-900">{{ siparis.musteri }}</h4>
-                                            <div class="flex items-center gap-2 mt-1">
-                                                <span
-                                                    class="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 font-semibold">{{
-                                                    siparis.urun_kodu }}</span>
-                                                <span class="text-xs text-slate-500">{{ siparis.cinsi }} {{
-                                                    siparis.kalinlik
-                                                    }}</span>
-                                            </div>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4 mt-4 py-3 border-t border-b border-slate-50">
-                                            <div>
-                                                <p class="text-[10px] text-slate-400 uppercase font-semibold">Termin</p>
-                                                <p class="text-sm font-medium text-slate-700">{{ siparis.termin_tarihi
-                                                    }}
-                                                </p>
-                                            </div>
-                                            <div class="text-right">
-                                                <p class="text-[10px] text-slate-400 uppercase font-semibold">Bekleyen
-                                                </p>
-                                                <p
-                                                    class="text-xl font-bold {{ 'text-red-500' if siparis.bekleyen_m2 > 1000 else 'text-blue-600' }}">
-                                                    {{ siparis.bekleyen_m2 }} m²</p>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center justify-between mt-4 gap-2">
-                                            {% if siparis.durum == 'Bekliyor' %}
-                                            <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
-                                                data-kalinlik="{{ siparis.kalinlik }}"
-                                                data-m2="{{ siparis.bekleyen_m2 }}" data-kod="{{ siparis.urun_kodu }}"
-                                                data-termin="{{ siparis.termin_tarihi }}"
-                                                data-musteri="{{ siparis.musteri }}"
-                                                onclick="openEditModalFromData(this)"
-                                                class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition">
-                                                <i class="fa-solid fa-pen mr-1"></i> Düzenle
-                                            </button>
-                                            <button
-                                                onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')"
-                                                class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition">
-                                                <i class="fa-solid fa-scissors mr-1"></i> Kısmi
-                                            </button>
-                                            <form action="/siparis" method="POST" class="inline">
-                                                <input type="hidden" name="action" value="tamamla_siparis">
-                                                <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                                                <button type="submit"
-                                                    class="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 shadow-lg shadow-green-500/30 transition"
-                                                    title="Tamamla">
-                                                    <i class="fa-solid fa-check"></i>
+                                        </td>
+                                        <td>
+                                            <div class="flex gap-2">
+                                                {% if siparis.durum == 'Bekliyor' %}
+                                                <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
+                                                    data-kalinlik="{{ siparis.kalinlik }}"
+                                                    data-m2="{{ siparis.bekleyen_m2 }}"
+                                                    data-kod="{{ siparis.urun_kodu }}"
+                                                    data-termin="{{ siparis.termin_tarihi }}"
+                                                    data-musteri="{{ siparis.musteri }}"
+                                                    data-toplam="{{ siparis.toplam_m2 }}"
+                                                    onclick="openEditModalFromData(this)"
+                                                    class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
+                                                    title="Düzenle">
+                                                    <i class="fa-solid fa-pen"></i>
                                                 </button>
-                                            </form>
-                                            {% elif siparis.durum == 'Tamamlandi' %}
-                                            <button onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
-                                                class="flex-1 bg-orange-100 text-orange-600 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 transition">
-                                                <i class="fa-solid fa-rotate-left mr-1"></i> Geri Al
-                                            </button>
-                                            {% endif %}
-                                            <form action="/siparis" method="POST" class="inline"
-                                                onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
-                                                <input type="hidden" name="action" value="sil_siparis">
-                                                <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
-                                                <button type="submit" class="text-red-400 hover:text-red-600 p-2 ml-1"
-                                                    title="Sil">
-                                                    <i class="fa-solid fa-trash"></i>
+                                                <button
+                                                    onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')"
+                                                    class="p-2 bg-cyan-100 text-cyan-600 rounded hover:bg-cyan-200 transition"
+                                                    title="Kısmi">
+                                                    <i class="fa-solid fa-scissors"></i>
                                                 </button>
-                                            </form>
-                                        </div>
-                                    </div>
+                                                <form action="/siparis" method="POST" class="inline">
+                                                    <input type="hidden" name="action" value="tamamla_siparis">
+                                                    <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                                    <button type="submit"
+                                                        class="p-2 bg-green-100 text-green-600 rounded hover:bg-green-200 transition"
+                                                        title="Tamamla">
+                                                        <i class="fa-solid fa-check"></i>
+                                                    </button>
+                                                </form>
+                                                {% elif siparis.durum == 'Tamamlandi' %}
+                                                <button
+                                                    onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
+                                                    class="p-2 bg-orange-100 text-orange-600 rounded hover:bg-orange-200 transition"
+                                                    title="Geri Al">
+                                                    <i class="fa-solid fa-rotate-left"></i>
+                                                </button>
+                                                {% endif %}
+                                                <form action="/siparis" method="POST" class="inline"
+                                                    onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
+                                                    <input type="hidden" name="action" value="sil_siparis">
+                                                    <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                                    <button type="submit"
+                                                        class="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+                                                        title="Sil">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
                                     {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                </tbody>
+                            </table>
 
-                    <!-- 7. ANALYSIS (Moved from Modal to Section) -->
-                    <div id="section-analysis" class="content-section hidden">
-                        <div class="bg-white rounded-xl shadow-lg border border-slate-200 h-[85vh] flex flex-col">
-                            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
-                                <h2 class="text-xl font-bold flex items-center gap-2">
-                                    <i class="fa-solid fa-chart-pie text-blue-600"></i> Ürün Sipariş Analizi
-                                </h2>
-                                <div class="relative w-64">
-                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <i class="fa-solid fa-search text-gray-400"></i>
-                                    </div>
-                                    <input type="text" id="analysisSearch"
-                                        class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm uppercase"
-                                        placeholder="Ürün Kodu Ara..." oninput="filterAnalysis(this.value)">
-                                </div>
-                            </div>
-
-                            <div class="flex flex-1 overflow-hidden p-4 gap-4">
-                                <!-- Left: List -->
-                                <div class="w-1/3 flex flex-col border rounded-lg overflow-hidden bg-gray-50 h-full">
-                                    <div
-                                        class="bg-gray-100 p-2 font-bold text-xs text-gray-500 uppercase flex justify-between">
-                                        <span>Ürün Kodu</span>
-                                        <span>Top. Bekleyen</span>
-                                    </div>
-                                    <div id="analysisList" class="flex-1 overflow-y-auto p-1 space-y-1">
-                                        <!-- Populated by JS -->
-                                    </div>
-                                </div>
-
-                                <!-- Right: Details -->
+                            <!-- MOBILE CARDS VIEW -->
+                            <div class="md:hidden space-y-4">
+                                {% for siparis in siparisler %}
                                 <div
-                                    class="w-2/3 flex flex-col border rounded-lg overflow-hidden bg-white relative h-full">
-                                    <div class="bg-blue-50 p-3 font-bold text-blue-800 border-b border-blue-100 flex justify-between items-center"
-                                        id="analysisDetailHeader">
-                                        <span>Detaylar</span>
-                                        <span class="text-xs font-normal text-blue-600">Ürün Seçiniz</span>
+                                    class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 relative {{ 'bg-green-50/30' if siparis.durum == 'Tamamlandi' }}">
+                                    <!-- Status Badge -->
+                                    <div class="absolute top-4 right-4">
+                                        {% if siparis.durum == 'Bekliyor' %}
+                                        <span
+                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-yellow-100 text-yellow-800">Bekliyor</span>
+                                        {% else %}
+                                        <span
+                                            class="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800">Tamamlandı</span>
+                                        {% endif %}
                                     </div>
-                                    <div id="analysisDetailContent" class="hidden flex-1 overflow-y-auto">
-                                        <table class="min-w-full divide-y divide-gray-200">
-                                            <thead class="bg-gray-50 sticky top-0">
-                                                <tr>
-                                                    <th
-                                                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Müşteri</th>
-                                                    <th
-                                                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Tarih</th>
-                                                    <th
-                                                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Termin</th>
-                                                    <th
-                                                        class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                                        Miktar</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="bg-white divide-y divide-gray-200"
-                                                id="analysisDetailTableBody">
-                                            </tbody>
-                                        </table>
+                                    <div class="pr-20">
+                                        <h4 class="text-lg font-bold text-slate-900">{{ siparis.musteri }}</h4>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <span
+                                                class="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs text-slate-600 font-semibold">{{
+                                                siparis.urun_kodu }}</span>
+                                            <span class="text-xs text-slate-500">{{ siparis.cinsi }} {{
+                                                siparis.kalinlik
+                                                }}</span>
+                                        </div>
                                     </div>
-                                    <div id="analysisEmptyState"
-                                        class="flex-1 flex flex-col items-center justify-center text-gray-400">
-                                        <i class="fa-solid fa-mouse-pointer text-4xl mb-2 opacity-50"></i>
-                                        <p>Detayları görmek için listeden bir ürün seçin.</p>
+                                    <div class="grid grid-cols-2 gap-4 mt-4 py-3 border-t border-b border-slate-50">
+                                        <div>
+                                            <p class="text-[10px] text-slate-400 uppercase font-semibold">Termin</p>
+                                            <p class="text-sm font-medium text-slate-700">{{ siparis.termin_tarihi
+                                                }}
+                                            </p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-[10px] text-slate-400 uppercase font-semibold">Bekleyen
+                                            </p>
+                                            <p
+                                                class="text-xl font-bold {{ 'text-red-500' if siparis.bekleyen_m2 > 1000 else 'text-blue-600' }}">
+                                                {{ siparis.bekleyen_m2 }} m²</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between mt-4 gap-2">
+                                        {% if siparis.durum == 'Bekliyor' %}
+                                        <button data-id="{{ siparis.id }}" data-cinsi="{{ siparis.cinsi }}"
+                                            data-kalinlik="{{ siparis.kalinlik }}" data-m2="{{ siparis.bekleyen_m2 }}"
+                                            data-kod="{{ siparis.urun_kodu }}" data-termin="{{ siparis.termin_tarihi }}"
+                                            data-musteri="{{ siparis.musteri }}" onclick="openEditModalFromData(this)"
+                                            class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-lg text-sm font-medium hover:bg-slate-200 transition">
+                                            <i class="fa-solid fa-pen mr-1"></i> Düzenle
+                                        </button>
+                                        <button
+                                            onclick="openPartialModal({{ siparis.id }}, {{ siparis.bekleyen_m2 }}, '{{ siparis.urun_kodu }}')"
+                                            class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition">
+                                            <i class="fa-solid fa-scissors mr-1"></i> Kısmi
+                                        </button>
+                                        <form action="/siparis" method="POST" class="inline">
+                                            <input type="hidden" name="action" value="tamamla_siparis">
+                                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                            <button type="submit"
+                                                class="bg-green-500 text-white px-3 py-2 rounded-lg hover:bg-green-600 shadow-lg shadow-green-500/30 transition"
+                                                title="Tamamla">
+                                                <i class="fa-solid fa-check"></i>
+                                            </button>
+                                        </form>
+                                        {% elif siparis.durum == 'Tamamlandi' %}
+                                        <button onclick="openUndoModal({{ siparis.id }}, '{{ siparis.urun_kodu }}')"
+                                            class="flex-1 bg-orange-100 text-orange-600 py-2 rounded-lg text-sm font-medium hover:bg-orange-200 transition">
+                                            <i class="fa-solid fa-rotate-left mr-1"></i> Geri Al
+                                        </button>
+                                        {% endif %}
+                                        <form action="/siparis" method="POST" class="inline"
+                                            onsubmit="return confirm('Silmek istediğinize emin misiniz?')">
+                                            <input type="hidden" name="action" value="sil_siparis">
+                                            <input type="hidden" name="siparis_id" value="{{ siparis.id }}">
+                                            <button type="submit" class="text-red-400 hover:text-red-600 p-2 ml-1"
+                                                title="Sil">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
+                                {% endfor %}
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- 8. ZEMIN ANALYSIS (Clone of Analysis) -->
-                    <div id="section-zemin-analysis" class="content-section hidden">
-                        <div class="bg-white rounded-xl shadow-lg border border-slate-200 h-[85vh] flex flex-col">
-                            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
-                                <h2 class="text-xl font-bold flex items-center gap-2">
-                                    <i class="fa-solid fa-layer-group text-purple-600"></i> Zemin (Cins) Analizi
-                                </h2>
-                                <div class="relative w-64">
-                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <i class="fa-solid fa-search text-gray-400"></i>
-                                    </div>
-                                    <input type="text" id="zeminSearch"
-                                        class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm uppercase"
-                                        placeholder="Zemin Ara..." oninput="filterZeminAnalysis(this.value)">
+                <!-- 7. ANALYSIS (Moved from Modal to Section) -->
+                <div id="section-analysis" class="content-section hidden">
+                    <div class="bg-white rounded-xl shadow-lg border border-slate-200 h-[85vh] flex flex-col">
+                        <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h2 class="text-xl font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-chart-pie text-blue-600"></i> Ürün Sipariş Analizi
+                            </h2>
+                            <div class="relative w-64">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-search text-gray-400"></i>
                                 </div>
+                                <input type="text" id="analysisSearch"
+                                    class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm uppercase"
+                                    placeholder="Ürün Kodu Ara..." oninput="filterAnalysis(this.value)">
                             </div>
+                        </div>
 
-                            <div class="flex flex-1 overflow-hidden p-4 gap-4">
-                                <!-- Left: List -->
-                                <div class="w-1/3 flex flex-col border rounded-lg overflow-hidden bg-gray-50 h-full">
-                                    <div
-                                        class="bg-gray-100 p-2 font-bold text-xs text-gray-500 uppercase flex justify-between">
-                                        <span>Zemin Cinsi</span>
-                                        <span>Top. Sipariş</span>
-                                    </div>
-                                    <div id="zeminList" class="flex-1 overflow-y-auto p-1 space-y-1">
-                                        <!-- Populated by JS -->
-                                    </div>
-                                </div>
-
-                                <!-- Right: Details -->
+                        <div class="flex flex-1 overflow-hidden p-4 gap-4">
+                            <!-- Left: List -->
+                            <div class="w-1/3 flex flex-col border rounded-lg overflow-hidden bg-gray-50 h-full">
                                 <div
-                                    class="w-2/3 flex flex-col border rounded-lg overflow-hidden bg-white relative h-full">
-                                    <div class="bg-purple-50 p-3 font-bold text-purple-800 border-b border-purple-100 flex justify-between items-center"
-                                        id="zeminDetailHeader">
-                                        <span>Zemin Detayları</span>
-                                        <span class="text-xs font-normal text-purple-600">Zemin Seçiniz</span>
-                                    </div>
-                                    <div id="zeminDetailContent" class="hidden flex-1 overflow-y-auto">
-                                        <table class="min-w-full divide-y divide-gray-200">
-                                            <thead class="bg-gray-50 sticky top-0">
-                                                <tr>
-                                                    <th
-                                                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Müşteri</th>
-                                                    <th
-                                                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Ürün Kodu</th>
-                                                    <th
-                                                        class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Termin</th>
-                                                    <th
-                                                        class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                                                        Miktar</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="bg-white divide-y divide-gray-200" id="zeminDetailTableBody">
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div id="zeminEmptyState"
-                                        class="flex-1 flex flex-col items-center justify-center text-gray-400">
-                                        <i class="fa-solid fa-layer-group text-4xl mb-2 opacity-50"></i>
-                                        <p>Detayları görmek için listeden bir zemin seçin.</p>
-                                    </div>
+                                    class="bg-gray-100 p-2 font-bold text-xs text-gray-500 uppercase flex justify-between">
+                                    <span>Ürün Kodu</span>
+                                    <span>Top. Bekleyen</span>
+                                </div>
+                                <div id="analysisList" class="flex-1 overflow-y-auto p-1 space-y-1">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Right: Details -->
+                            <div class="w-2/3 flex flex-col border rounded-lg overflow-hidden bg-white relative h-full">
+                                <div class="bg-blue-50 p-3 font-bold text-blue-800 border-b border-blue-100 flex justify-between items-center"
+                                    id="analysisDetailHeader">
+                                    <span>Detaylar</span>
+                                    <span class="text-xs font-normal text-blue-600">Ürün Seçiniz</span>
+                                </div>
+                                <div id="analysisDetailContent" class="hidden flex-1 overflow-y-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Müşteri</th>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Tarih</th>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Termin</th>
+                                                <th
+                                                    class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                    Miktar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200" id="analysisDetailTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="analysisEmptyState"
+                                    class="flex-1 flex flex-col items-center justify-center text-gray-400">
+                                    <i class="fa-solid fa-mouse-pointer text-4xl mb-2 opacity-50"></i>
+                                    <p>Detayları görmek için listeden bir ürün seçin.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                </div> <!-- END SECTIONS CONTAINER -->
+                <!-- 8. ZEMIN ANALYSIS (Clone of Analysis) -->
+                <div id="section-zemin-analysis" class="content-section hidden">
+                    <div class="bg-white rounded-xl shadow-lg border border-slate-200 h-[85vh] flex flex-col">
+                        <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h2 class="text-xl font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-layer-group text-purple-600"></i> Zemin (Cins) Analizi
+                            </h2>
+                            <div class="relative w-64">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-search text-gray-400"></i>
+                                </div>
+                                <input type="text" id="zeminSearch"
+                                    class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-purple-500 focus:border-purple-500 text-sm uppercase"
+                                    placeholder="Zemin Ara..." oninput="filterZeminAnalysis(this.value)">
+                            </div>
+                        </div>
 
-            </div>
-        </main>
+                        <div class="flex flex-1 overflow-hidden p-4 gap-4">
+                            <!-- Left: List -->
+                            <div class="w-1/3 flex flex-col border rounded-lg overflow-hidden bg-gray-50 h-full">
+                                <div
+                                    class="bg-gray-100 p-2 font-bold text-xs text-gray-500 uppercase flex justify-between">
+                                    <span>Zemin Cinsi</span>
+                                    <span>Top. Sipariş</span>
+                                </div>
+                                <div id="zeminList" class="flex-1 overflow-y-auto p-1 space-y-1">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Right: Details -->
+                            <div class="w-2/3 flex flex-col border rounded-lg overflow-hidden bg-white relative h-full">
+                                <div class="bg-purple-50 p-3 font-bold text-purple-800 border-b border-purple-100 flex justify-between items-center"
+                                    id="zeminDetailHeader">
+                                    <span>Zemin Detayları</span>
+                                    <span class="text-xs font-normal text-purple-600">Zemin Seçiniz</span>
+                                </div>
+                                <div id="zeminDetailContent" class="hidden flex-1 overflow-y-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50 sticky top-0">
+                                            <tr>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Müşteri</th>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Ürün Kodu</th>
+                                                <th
+                                                    class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                                                    Termin</th>
+                                                <th
+                                                    class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                                                    Miktar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200" id="zeminDetailTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div id="zeminEmptyState"
+                                    class="flex-1 flex flex-col items-center justify-center text-gray-400">
+                                    <i class="fa-solid fa-layer-group text-4xl mb-2 opacity-50"></i>
+                                    <p>Detayları görmek için listeden bir zemin seçin.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> <!-- END SECTIONS CONTAINER -->
+
+    </div>
+    </main>
     </div>
 
     <!-- MODALS -->
