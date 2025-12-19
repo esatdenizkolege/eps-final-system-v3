@@ -20,7 +20,7 @@ import sqlite3
 
 import json
 import unicodedata
-
+import shutil # Added for file operations
 from datetime import datetime, timedelta
 
 from collections import defaultdict
@@ -59,9 +59,19 @@ DEFAULT_CINSLER = ['BAROK', 'YATAY TAŞ', 'DÜZ TUĞLA', 'KAYRAK TAŞ', 'PARKE T
 # --- JSON/KAPASITE/ÜRÜN KODU YÖNETİMİ ---
 
 def save_data(data, filename):
-    """JSON verisini kaydeder."""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+    """JSON verisini güvenli (atomic) şekilde kaydeder."""
+    temp_filename = f"{filename}.tmp"
+    try:
+        with open(temp_filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4)
+            f.flush()
+            os.fsync(f.fileno()) # Diske yazıldığından emin ol
+        os.replace(temp_filename, filename) # Atomik işlem
+    except Exception as e:
+        print(f"KAYIT HATASI ({filename}): {e}")
+        if os.path.exists(temp_filename):
+            try: os.remove(temp_filename)
+            except: pass
 
 def normalize_nfc(text):
     """Metni NFC formuna (composed) normalize eder."""
@@ -70,38 +80,49 @@ def normalize_nfc(text):
     return text
 
 def load_data(filename):
-    """JSON verisini yükler ve yoksa varsayılan değerleri döndürür."""
+    """JSON verisini yükler. Hata durumunda dosyayı yedekler ve varsayılan döner (üzerine yazmaz)."""
     if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            try:
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # Normalize string data immediately upon load
-                if filename == 'urun_kodlari.json':
-                    return {normalize_nfc(k): [normalize_nfc(v) for v in vals] for k, vals in data.items()}
-                if filename == CINS_FILE:
-                    return {'cinsler': [normalize_nfc(c) for c in data.get('cinsler', [])]}
-                if filename == KALINLIK_FILE:
-                    return {'kalinliklar': [normalize_nfc(k) for k in data.get('kalinliklar', [])]}
-                return data
-            except json.JSONDecodeError as e:
-                # KRİTİK DÜZELTME: JSON okuma hatasını yakala ve logla
-                print(f"KRİTİK HATA: {filename} dosyasinda JSONDecodeError: {e}")
-                if filename == 'urun_kodlari.json': return load_data_from_app_defaults(filename)
-                if filename == KALINLIK_FILE: return {'kalinliklar': DEFAULT_KALINLIKLAR}
-                if filename == CINS_FILE: return {'cinsler': DEFAULT_CINSLER}
-                if filename == KAPASITE_FILE: return {"gunluk_siva_m2": 600}
-                return {} # Varsayılan boş değer döndür
-    
-    # Yoksa varsayılan veriyi döndür
-    return load_data_from_app_defaults(filename)
+                
+            # Normalize string data
+            if filename == 'urun_kodlari.json':
+                return {normalize_nfc(k): [normalize_nfc(v) for v in vals] for k, vals in data.items()}
+            if filename == CINS_FILE:
+                return {'cinsler': [normalize_nfc(c) for c in data.get('cinsler', [])]}
+            if filename == KALINLIK_FILE:
+                return {'kalinliklar': [normalize_nfc(k) for k in data.get('kalinliklar', [])]}
+            return data
 
-def load_data_from_app_defaults(filename):
+        except json.JSONDecodeError as e:
+            print(f"KRİTİK HATA: {filename} bozuk veya okunamadı. YEDEKLENİYOR... Hata: {e}")
+            try:
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_name = f"{filename}.corrupt_{timestamp}"
+                shutil.copy2(filename, backup_name)
+                print(f"DOSYA YEDEKLENDİ: {backup_name} (Bu dosya incelenmek üzere saklandı)")
+            except Exception as backup_err:
+                print(f"YEDEKLEME BAŞARISIZ: {backup_err}")
+            
+            # Hatali dosya durumunda uygulamayi çökertme ama DOSYAYI EZME.
+            # Sadece hafızada varsayılanları kullan.
+            if filename == 'urun_kodlari.json': return load_data_from_app_defaults(filename, save_to_disk=False)
+            if filename == KALINLIK_FILE: return {'kalinliklar': DEFAULT_KALINLIKLAR}
+            if filename == CINS_FILE: return {'cinsler': DEFAULT_CINSLER}
+            if filename == KAPASITE_FILE: return {"gunluk_siva_m2": 600}
+            return {} 
+    
+    # Dosya hiç yoksa varsayılanları oluştur ve KAYDET
+    return load_data_from_app_defaults(filename, save_to_disk=True)
+
+def load_data_from_app_defaults(filename, save_to_disk=True):
     """Dosya diskte yoksa veya JSON hatası varsa uygulamanın varsayılanlarını döndürür."""
     if filename == KAPASITE_FILE:
         return {"gunluk_siva_m2": 600}
     
     if filename == CINS_FILE:
-        save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
+        if save_to_disk: save_data({'cinsler': DEFAULT_CINSLER}, CINS_FILE)
         return {'cinsler': DEFAULT_CINSLER}
 
     if filename == 'urun_kodlari.json':
@@ -129,7 +150,7 @@ def load_data_from_app_defaults(filename):
         return urun_kodlari_data
     
     if filename == KALINLIK_FILE:
-        save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
+        if save_to_disk: save_data({'kalinliklar': DEFAULT_KALINLIKLAR}, KALINLIK_FILE)
         return DEFAULT_KALINLIKLAR
 
     return {}
