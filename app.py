@@ -889,31 +889,38 @@ def handle_siparis_islem():
             cur.execute("SELECT urun_kodu, cinsi, kalinlik, bekleyen_m2, toplam_m2 FROM siparisler WHERE id = %s", (siparis_id,))
             current_order = cur.fetchone()
             
-            yeni_cinsi = None
-            yeni_kalinlik = None
-
-            if current_order and current_order['urun_kodu'] == yeni_urun_kodu:
-                # Code unchanged, keep existing Cins/Kalinlik (preserve legacy codes)
-                yeni_cinsi = current_order['cinsi']
-                yeni_kalinlik = current_order['kalinlik']
+            # 1. Try to get explicit Cins/Kalinlik from Form (Prioritize Manual Selection)
+            yeni_cinsi = request.form.get('yeni_cinsi')
+            yeni_kalinlik = request.form.get('yeni_kalinlik')
+            
+            if yeni_cinsi and yeni_kalinlik:
+                # User explicitly selected validation
+                yeni_cinsi = yeni_cinsi.strip().upper()
+                yeni_kalinlik = yeni_kalinlik.strip().upper()
             else:
-                # Code changed, validation required
-                cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
-                if not cins_kalinlik_key:
-                     # Fallback: If not in map, just accept it (for flexibility) but log warning
-                     # Or better: raise error only if it's a NEW code not in map.
-                     # But for now, let's keep validation strictly for NEW codes.
-                     raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
-                
-                parts = cins_kalinlik_key.rsplit(' ', 2)
-                if len(parts) == 3:
-                     yeni_cinsi = parts[0].strip().upper()
-                     yeni_kalinlik = f"{parts[1]} {parts[2]}".strip().upper()
-                elif len(parts) == 2:
-                     yeni_cinsi = parts[0].strip().upper()
-                     yeni_kalinlik = parts[1].strip().upper()
+                # 2. Fallback: Infer from Product Code if form is empty (Legacy/API)
+                if current_order and current_order['urun_kodu'] == yeni_urun_kodu:
+                    # Code unchanged, keep existing Cins/Kalinlik
+                    yeni_cinsi = current_order['cinsi']
+                    yeni_kalinlik = current_order['kalinlik']
                 else:
-                     raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık formatı hatalı")
+                    # Code changed, validation required
+                    cins_kalinlik_key = next((key for key, codes in CINS_TO_BOYALI_MAP.items() if yeni_urun_kodu in codes), None)
+                    if not cins_kalinlik_key:
+                         # Fallback: If not in map, just accept it (for flexibility) but log warning
+                         # Or better: raise error only if it's a NEW code not in map.
+                         # But for now, let's keep validation strictly for NEW codes.
+                         raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık bulunamadı.")
+                    
+                    parts = cins_kalinlik_key.rsplit(' ', 2)
+                    if len(parts) == 3:
+                         yeni_cinsi = parts[0].strip().upper()
+                         yeni_kalinlik = f"{parts[1]} {parts[2]}".strip().upper()
+                    elif len(parts) == 2:
+                         yeni_cinsi = parts[0].strip().upper()
+                         yeni_kalinlik = parts[1].strip().upper()
+                    else:
+                         raise ValueError(f"Ürün kodu {yeni_urun_kodu} için cins/kalınlık formatı hatalı")
 
             print(f"DEBUG: Editing Order {siparis_id}. New Customer: {yeni_musteri}, Code: {yeni_urun_kodu}, Date: {yeni_termin_tarihi}") # DEBUG LOG
 

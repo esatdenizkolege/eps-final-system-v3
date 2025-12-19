@@ -1009,13 +1009,13 @@
                             <label class="block text-sm font-medium text-gray-700">Ürün Bilgileri</label>
                             <div class="flex gap-2">
                                 <select class="cinsi_select w-1/2 border border-gray-300 rounded-md py-2 px-3 text-sm"
-                                    required onchange="filterProductCodes(this)">
+                                    name="yeni_cinsi" required onchange="filterProductCodes(this)">
                                     <option value="">Cins</option>
                                     {% for c in CINSLER %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
                                 </select>
                                 <select
                                     class="kalinlik_select w-1/2 border border-gray-300 rounded-md py-2 px-3 text-sm"
-                                    required onchange="filterProductCodes(this)">
+                                    name="yeni_kalinlik" required onchange="filterProductCodes(this)">
                                     <option value="">Kalınlık</option>
                                     {% for k in KALINLIKLAR %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
                                 </select>
