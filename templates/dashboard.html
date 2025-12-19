@@ -1174,18 +1174,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
     <script>
-        let CINS_TO_BOYALI_MAP = {}; // Will be loaded from API
-        // Use 'var' to avoid block-scope redeclaration issues if any
-        var CINSLER = {{ CINSLER | tojson }};
-        var KALINLIKLAR = {{ KALINLIKLAR | tojson }};
-
-        const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
-        const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
-
-
-
-
-        // SPA Navigation Logic
+        // SPA Navigation Logic - Moved to top for safety
         function showSection(sectionId, linkElement) {
             console.log("Switching to section:", sectionId);
 
@@ -1198,6 +1187,8 @@
                 target.classList.remove('hidden');
             } else {
                 console.error("Section not found:", sectionId);
+                // Fail-safe: Try to remove hidden from ID directly if classList query failed?
+                // No, just return.
                 return;
             }
 
@@ -1215,16 +1206,25 @@
 
             // 4. Special Section Logic
             if (sectionId === 'section-analysis') {
-                if (typeof loadAnalysisData === 'function') {
-                    loadAnalysisData();
-                } else {
-                    if (typeof openAnalysisModal === 'function') openAnalysisModal();
-                }
+                if (typeof loadAnalysisData === 'function') loadAnalysisData();
             }
             if (sectionId === 'section-zemin-analysis') {
                 if (typeof loadZeminAnalysisData === 'function') loadZeminAnalysisData();
             }
         }
+
+        let CINS_TO_BOYALI_MAP = {}; // Will be loaded from API
+        // Use 'var' to avoid block-scope redeclaration issues if any
+        var CINSLER = {{ CINSLER | tojson }};
+        var KALINLIKLAR = {{ KALINLIKLAR | tojson }};
+
+        const CINS_OPTIONS = CINSLER.map(c => `<option value="${c}">${c}</option>`).join('');
+        const KALINLIK_OPTIONS = KALINLIKLAR.map(k => `<option value="${k}">${k}</option>`).join('');
+
+
+
+
+        // SPA Navigation Logic (Moved to Top)
 
         // Load Product Codes from API
         async function loadProductCodes() {
