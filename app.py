@@ -476,7 +476,7 @@ def calculate_planning(conn):
 
         # KRİTİK KISIM: Termin tarihine göre sıralama
         cur.execute("""
-            SELECT id, cinsi, kalinlik, bekleyen_m2, termin_tarihi 
+            SELECT id, cinsi, kalinlik, bekleyen_m2, termin_tarihi, musteri 
             FROM siparisler 
             WHERE durum='Bekliyor' 
             ORDER BY termin_tarihi ASC, siparis_tarihi ASC 
