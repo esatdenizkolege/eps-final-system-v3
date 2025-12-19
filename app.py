@@ -1115,6 +1115,8 @@ def handle_siparis_islem():
         # YENİ EK: Toplu İşlemler
         elif action == 'guncelle_tarih_toplu':
             siparis_ids = request.form.getlist('siparis_ids[]')
+            if not siparis_ids:
+                siparis_ids = request.form.getlist('siparis_ids')
             yeni_termin = request.form['yeni_termin_tarihi']
             if not siparis_ids or not yeni_termin:
                 raise ValueError("Seçili sipariş veya tarih yok.")
