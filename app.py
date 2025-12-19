@@ -1356,7 +1356,7 @@ def api_stok_verileri():
         CINSLER = load_cinsler()
         VARYANTLAR = [(c, k) for c in CINSLER for k in KALINLIKLAR]
         
-        toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
+        toplam_gerekli_siva, gunluk_siva_m2, siva_plan_detay, baski_plan_detay, stok_map = calculate_planning(conn)
         
         stok_data = {}
         deficit_analysis = {}
@@ -1411,8 +1411,8 @@ def api_stok_verileri():
         cur.close()
         conn.close()
 
-        formatted_sevkiyat_plan_detay = {}
-        for tarih, musteriler in sevkiyat_plan_detay.items():
+        formatted_baski_plan_detay = {}
+        for tarih, musteriler in baski_plan_detay.items():
             formatted_musteriler = {}
             for musteri, urunler in musteriler.items():
                 formatted_urunler = []
@@ -1422,7 +1422,7 @@ def api_stok_verileri():
                         item_dict['termin_tarihi'] = item_dict['termin_tarihi'].isoformat()
                     formatted_urunler.append(item_dict)
                 formatted_musteriler[musteri] = formatted_urunler
-            formatted_sevkiyat_plan_detay[tarih] = formatted_musteriler
+            formatted_baski_plan_detay[tarih] = formatted_musteriler
             
         toplam_bekleyen_siparis_m2_api = sum(s['bekleyen_m2'] for s in siparis_listesi if s['durum'] == 'Bekliyor')
 
@@ -1433,7 +1433,7 @@ def api_stok_verileri():
             'toplam_gerekli_siva': toplam_gerekli_siva,
             'gunluk_siva_m2': gunluk_siva_m2,
             'siva_plan_detay': dict(siva_plan_detay), 
-            'sevkiyat_plan_detay': formatted_sevkiyat_plan_detay,
+            'baski_plan_detay': formatted_baski_plan_detay,
             'toplam_bekleyen_siparis_m2': toplam_bekleyen_siparis_m2_api
         })
         

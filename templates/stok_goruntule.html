@@ -370,7 +370,7 @@
                 }
                 const data = await response.json();
 
-                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.sevkiyat_plan_detay);
+                renderPlanlama(data.toplam_gerekli_siva, data.gunluk_siva_m2, data.siva_plan_detay, data.baski_plan_detay);
                 renderStok(data.stok, data.deficit_analysis);
                 renderSiparisler(data.siparisler);
 
@@ -386,7 +386,7 @@
             }
         }
 
-        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, sevkiyatPlan) {
+        function renderPlanlama(toplam_eksi_m2, kapasite, sivaPlan, baskiPlan) {
             let html = `
                 <div style="margin: 15px 0; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2); display: flex; justify-content: space-between; align-items: center;">
                     <span style="color: #60a5fa; font-weight: 600; font-size: 0.9em;">Kapasite</span>
@@ -409,9 +409,12 @@
                         </div>
                         <ul class="product-list">`;
                     gunlukUretim.forEach(item => {
-                        html += `<li class="product-item">
-                                <span style="color: #cbd5e1;">${item.cinsi}</span>
-                                <span class="product-m2">${formatM2(item.m2)}</span>
+                        html += `<li class="product-item" style="flex-direction: column; align-items: flex-start;">
+                                <div style="width: 100%; display: flex; justify-content: space-between;">
+                                    <span style="color: #cbd5e1;">${item.cinsi}</span>
+                                    <span class="product-m2">${formatM2(item.m2)}</span>
+                                </div>
+                                ${item.musteri_detay ? `<div style="font-size: 0.7em; color: #64748b; margin-top: 2px;">${item.musteri_detay}</div>` : ''}
                             </li>`;
                     });
                     html += `</ul></div>`;
@@ -421,49 +424,53 @@
             }
             html += `</div>`;
 
-            // 2. SEVKİYAT PLANI (YENİ FORMAT: Date -> Customer -> Items)
-            html += `<div class="plan-box" style="border-color: rgba(245, 158, 11, 0.3);">
-                    <h3 style="color: #fbbf24;">🚚 Sevkiyat Planı</h3>`;
+            // 2. BASKI PLANI (Updated from Sevkiyat Planı)
+            html += `<div class="plan-box" style="border-color: rgba(99, 102, 241, 0.3);">
+                    <h3 style="color: #818cf8;">🖨️ Baskı Planı</h3>`;
 
-            const sevkiyatKeys = Object.keys(sevkiyatPlan).sort();
+            if (baskiPlan) {
+                const baskiKeys = Object.keys(baskiPlan).sort();
 
-            if (sevkiyatKeys.length > 0) {
-                sevkiyatKeys.forEach(tarih => {
-                    const musteriler = sevkiyatPlan[tarih];
-                    let gunlukToplam = 0;
-                    Object.values(musteriler).forEach(urunListesi => {
-                        gunlukToplam += urunListesi.reduce((sum, i) => sum + i.bekleyen_m2, 0);
-                    });
-
-                    html += `<div style="margin-top: 15px;">
-                                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-                                    <span style="background: #fbbf24; color: #1e293b; font-weight: bold; font-size: 0.75em; padding: 2px 6px; border-radius: 4px;">${tarih}</span>
-                                    <span style="color: #94a3b8; font-size: 0.8em;">Toplam: ${formatM2(gunlukToplam)} m²</span>
-                                </div>
-                                <div style="padding-left: 5px; border-left: 2px solid #334155;">`;
-
-                    for (const [musteri, urunler] of Object.entries(musteriler)) {
-                        const musteriToplam = urunler.reduce((sum, i) => sum + i.bekleyen_m2, 0);
-                        html += `<div class="customer-group">
-                                    <div class="customer-header">
-                                        <span class="customer-name">${musteri}</span>
-                                        <span class="customer-total">${formatM2(musteriToplam)} m²</span>
-                                    </div>
-                                    <ul class="product-list">`;
-                        urunler.forEach(item => {
-                            html += `<li class="product-item">
-                                        <span class="product-code">${item.urun_kodu}</span>
-                                        <span class="product-m2">${formatM2(item.bekleyen_m2)}</span>
-                                     </li>`;
+                if (baskiKeys.length > 0) {
+                    baskiKeys.forEach(tarih => {
+                        const musteriler = baskiPlan[tarih];
+                        let gunlukToplam = 0;
+                        Object.values(musteriler).forEach(urunListesi => {
+                            gunlukToplam += urunListesi.reduce((sum, i) => sum + i.bekleyen_m2, 0);
                         });
-                        html += `   </ul>
+
+                        html += `<div style="margin-top: 15px;">
+                                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                        <span style="background: #818cf8; color: #0f172a; font-weight: bold; font-size: 0.75em; padding: 2px 6px; border-radius: 4px;">${tarih}</span>
+                                        <span style="color: #94a3b8; font-size: 0.8em;">Toplam: ${formatM2(gunlukToplam)} m²</span>
+                                    </div>
+                                    <div style="padding-left: 5px; border-left: 2px solid #334155;">`;
+
+                        for (const [musteri, urunler] of Object.entries(musteriler)) {
+                            const musteriToplam = urunler.reduce((sum, i) => sum + i.bekleyen_m2, 0);
+                            html += `<div class="customer-group">
+                                        <div class="customer-header">
+                                            <span class="customer-name">${musteri}</span>
+                                            <span class="customer-total">${formatM2(musteriToplam)} m²</span>
+                                        </div>
+                                        <ul class="product-list">`;
+                            urunler.forEach(item => {
+                                html += `<li class="product-item">
+                                            <span class="product-code">${item.urun_kodu}</span>
+                                            <span class="product-m2">${formatM2(item.bekleyen_m2)}</span>
+                                         </li>`;
+                            });
+                            html += `   </ul>
+                                     </div>`;
+                        }
+                        html += `   </div>
                                  </div>`;
-                    }
-                    html += `   </div>
-                             </div>`;
-                });
+                    });
+                } else {
+                    html += `<div class="no-data">Planlanan baskı yok.</div>`;
+                }
             } else {
-                html += `<div class="no-data">Planlanan sevkiyat yok.</div>`;
+                html += `<div class="no-data">Veri yok.</div>`;
             }
             html += `</div>`;
 
