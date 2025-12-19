@@ -613,9 +613,9 @@ def calculate_planning(conn):
             if ihtiyac_index >= len(siva_uretim_sirasli_ihtiyac):
                 break 
         
-        # 5 Günlük Sevkiyat Detay Planı (Termin tarihine göre)
+        # 5 Günlük Baskı Planı (Termin tarihine göre)
         bugun = datetime.now().date()
-        sevkiyat_plan_detay = {} 
+        baski_plan_detay = {} 
         for i in range(0, 5): 
             plan_tarihi = (bugun + timedelta(days=i)).strftime('%Y-%m-%d')
             cur.execute("""
@@ -632,10 +632,10 @@ def calculate_planning(conn):
                 for s in sevkiyatlar:
                     gunluk_plan[s['musteri']].append(s)
                 
-                sevkiyat_plan_detay[plan_tarihi] = dict(gunluk_plan)
+                baski_plan_detay[plan_tarihi] = dict(gunluk_plan)
         
         cur.close()
-        return toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map
+        return toplam_gerekli_siva, kapasite, siva_plan_detay, baski_plan_detay, stok_map
         
     except Exception as e:
         print(f"--- KRİTİK HATA LOGU (calculate_planning) ---")
@@ -674,7 +674,8 @@ def index():
         init_db() 
 
     # 2. Planlama ve Stok Haritasını Hesapla
-    toplam_gerekli_siva, kapasite, siva_plan_detay, sevkiyat_plan_detay, stok_map = calculate_planning(conn)
+    # 2. Planlama ve Stok Haritasını Hesapla
+    toplam_gerekli_siva, kapasite, siva_plan_detay, baski_plan_detay, stok_map = calculate_planning(conn)
     
     # 3. Stok ve Eksik Analizi Listesini Oluştur
     stok_list = []
@@ -727,7 +728,7 @@ def index():
     cur.close()
     conn.close()
     
-    return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, sevkiyat_plan_detay=sevkiyat_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
+    return render_template('dashboard.html', stok_list=stok_list, siparisler=siparis_listesi, CINSLER=CINSLER, KALINLIKLAR=KALINLIKLAR, next_siparis_kodu=next_siparis_kodu, today=today, message=message, gunluk_siva_m2=gunluk_siva_m2, toplam_gerekli_siva=toplam_gerekli_siva, siva_plan_detay=siva_plan_detay, baski_plan_detay=baski_plan_detay, CINS_TO_BOYALI_MAP=CINS_TO_BOYALI_MAP, toplam_bekleyen_siparis_m2=toplam_bekleyen_siparis_m2)
 
 # --- KRİTİK VERİ KURTARMA ROTASI ---
 @app.route('/admin/data_repair', methods=['GET'])
