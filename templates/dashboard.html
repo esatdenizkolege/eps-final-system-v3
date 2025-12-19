@@ -1719,6 +1719,7 @@
                         grouped[cinsi] = {
                             name: cinsi,
                             total_orders: 0,
+                            total_m2: 0,
                             items: []
                         };
                     }
@@ -1728,8 +1729,10 @@
                     // Interpreted as "Count of Rows" not "Volume M2".
 
                     // Calculate Order Count (Rows)
+                    // Calculate Order Count (Rows)
                     const orderCount = item.detaylar.length;
                     grouped[cinsi].total_orders += orderCount;
+                    grouped[cinsi].total_m2 += item.toplam_bekleyen;
 
                     // Add all details to this group for the view
                     item.detaylar.forEach(d => {
@@ -1769,7 +1772,10 @@
                 div.innerHTML = `
                     <div class="flex flex-col">
                         <span class="font-bold text-gray-700 text-base">${group.name}</span>
-                        <span class="text-xs text-gray-400 font-normal">Toplam ${group.total_orders} Sipariş Satırı</span>
+                        <div class="flex gap-2 text-xs text-gray-400 font-normal">
+                             <span>${group.total_orders} Sipariş</span> | 
+                             <span class="text-blue-600 font-bold">${group.total_m2.toLocaleString('tr-TR')} m²</span>
+                        </div>
                     </div>
                     <div class="text-base font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded group-hover:bg-purple-100">
                         <i class="fa-solid fa-chevron-right text-xs"></i>
@@ -1791,7 +1797,10 @@
             const header = document.getElementById('zeminDetailHeader');
             header.innerHTML = `
                 <span class="flex items-center gap-2"><i class="fa-solid fa-layer-group text-purple-500"></i> ${group.name}</span>
-                <span class="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-1 rounded">${group.total_orders} Kayıt</span>
+                <div class="flex gap-2">
+                    <span class="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">${group.total_m2.toLocaleString('tr-TR')} m²</span>
+                    <span class="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-1 rounded">${group.total_orders} Kayıt</span>
+                </div>
             `;
 
             // Show Content
