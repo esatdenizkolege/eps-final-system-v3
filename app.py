@@ -367,6 +367,47 @@ def init_db():
                 """, (temiz_c, temiz_k, asama, 0))
         
         conn.commit()
+        
+        # --- SELF-HEALING: Restore missing definitions from Order History ---
+        # This fixes the issue where JSON files were reset but Orders still exist with those types.
+        print("DEBUG: Checking for missing definitions in Order History...")
+        
+        # 1. Restore Missing Cins
+        cur.execute("SELECT DISTINCT cinsi FROM siparisler")
+        db_cinsler = [row['cinsi'] for row in cur.fetchall() if row['cinsi']]
+        
+        cins_added = False
+        current_cinsler = set(CINSLER)
+        for c in db_cinsler:
+            c = normalize_nfc(c).strip().upper()
+            if c and c not in current_cinsler:
+                print(f"RESTORING MISSING CINS: {c}")
+                CINSLER.append(c)
+                current_cinsler.add(c)
+                cins_added = True
+        
+        if cins_added:
+            save_data({'cinsler': sorted(list(current_cinsler))}, CINS_FILE)
+            print("CINS LIST UPDATED FROM DB HISTORY.")
+
+        # 2. Restore Missing Kalinlik
+        cur.execute("SELECT DISTINCT kalinlik FROM siparisler")
+        db_kalinliklar = [row['kalinlik'] for row in cur.fetchall() if row['kalinlik']]
+        
+        kalinlik_added = False
+        current_kalinliklar = set(KALINLIKLAR)
+        for k in db_kalinliklar:
+            k = normalize_nfc(k).strip().upper()
+            if k and k not in current_kalinliklar:
+                print(f"RESTORING MISSING KALINLIK: {k}")
+                KALINLIKLAR.append(k)
+                current_kalinliklar.add(k)
+                kalinlik_added = True
+        
+        if kalinlik_added:
+            save_data({'kalinliklar': sorted(list(current_kalinliklar), key=lambda x: str(x))}, KALINLIK_FILE) # Simple sort
+            print("KALINLIK LIST UPDATED FROM DB HISTORY.")
+
         cur.close()
         conn.close()
         print("Veritabanı başarıyla başlatıldı (Mod: " + ("PostgreSQL" if DATABASE_URL else "SQLite") + ").")
