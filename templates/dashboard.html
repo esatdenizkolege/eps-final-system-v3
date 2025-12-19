@@ -507,7 +507,9 @@
                                     </div>
                                     <ul class="text-sm text-slate-600 space-y-1">
                                         {% for item in details %}
-                                        <li>• {{ item.cinsi }}: <b>{{ item.m2 }}</b> m²</li>
+                                        <li>• {{ item.cinsi }}: <b>{{ item.m2 }}</b> m² <span
+                                                class="text-xs text-gray-500 font-normal">{{ item.musteri_detay
+                                                }}</span></li>
                                         {% endfor %}
                                     </ul>
                                 </div>

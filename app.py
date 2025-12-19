@@ -567,26 +567,30 @@ def calculate_planning(conn):
             if kalan_ihtiyac > 0:
                 siva_uretim_sirasli_ihtiyac.append({
                     'key': f"{temiz_cinsi} {temiz_kalinlik}",
-                    'm2': kalan_ihtiyac
+                    'm2': kalan_ihtiyac,
+                    'musteri': siparis['musteri'] # Add customer info
                 })
 
         siva_plan_detay = defaultdict(list) 
         ihtiyac_index = 0
         
-        for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
+            for gun in range(1, 6): # Önümüzdeki 5 gün için planlama
             kalan_kapasite_bugun = kapasite
             # KRİTİK DÜZELTME: O gün üretilecek ürünleri birleştirmek için geçici sözlük
-            gunluk_uretim_birlesik = defaultdict(int)
+            # Key: Product Name -> Value: {total_m2: 0, customers: {Name: m2}}
+            gunluk_uretim_birlesik = defaultdict(lambda: {'total_m2': 0, 'customers': defaultdict(int)})
             
             while kalan_kapasite_bugun > 0 and ihtiyac_index < len(siva_uretim_sirasli_ihtiyac):
                 ihtiyac = siva_uretim_sirasli_ihtiyac[ihtiyac_index]
                 key = ihtiyac['key']
                 m2_gerekli = ihtiyac['m2']
+                musteri = ihtiyac['musteri']
                 
                 m2_yapilacak = min(m2_gerekli, kalan_kapasite_bugun)
                 
                 # DÜZELTME: Plan detayına tek tek eklemek yerine, önce günlük toplamı topla
-                gunluk_uretim_birlesik[key] += m2_yapilacak
+                gunluk_uretim_birlesik[key]['total_m2'] += m2_yapilacak
+                gunluk_uretim_birlesik[key]['customers'][musteri] += m2_yapilacak
                 
                 ihtiyac['m2'] -= m2_yapilacak
                 kalan_kapasite_bugun -= m2_yapilacak
@@ -595,11 +599,15 @@ def calculate_planning(conn):
                     ihtiyac_index += 1
                 
             # GÜNCEL DÜZELTME: Gün sonunda birleştirilmiş sonuçları ana plan detayına ekle
-            for cinsi_key, m2_total in gunluk_uretim_birlesik.items():
-                if m2_total > 0:
+            for cinsi_key, data in gunluk_uretim_birlesik.items():
+                if data['total_m2'] > 0:
+                    # Format customer details string: " (Müşteri A: 50, Müşteri B: 30)"
+                    cust_details = ", ".join([f"{k}: {v:.0f}" for k, v in data['customers'].items()])
+                    
                     siva_plan_detay[gun].append({
                         'cinsi': cinsi_key,
-                        'm2': m2_total
+                        'm2': data['total_m2'],
+                        'musteri_detay': f"({cust_details})" # Add pre-formatted string
                     })
 
             if ihtiyac_index >= len(siva_uretim_sirasli_ihtiyac):
